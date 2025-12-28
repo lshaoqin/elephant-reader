@@ -1,0 +1,36 @@
+services:
+  mfa:
+    image: mmcauliffe/montreal-forced-aligner:latest
+    container_name: mfa_aligner
+    user: root
+    entrypoint: /bin/bash
+    command: -c "while true; do sleep 1; done"
+    volumes:
+      - mfa_data:/mfa
+    networks:
+      - backend_network
+
+  flask-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: flask_tts_app
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_ENV=development
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - .:/backend
+    depends_on:
+      - mfa
+    networks:
+      - backend_network
+    restart: unless-stopped
+
+volumes:
+  mfa_data:
+
+networks:
+  backend_network:
+    driver: bridge

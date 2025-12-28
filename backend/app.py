@@ -11,6 +11,11 @@ from kokoro import KPipeline
 import soundfile as sf
 import io
 import numpy as np
+import subprocess
+import json
+import shutil
+import re
+from typing import List, Tuple, Dict
 
 load_dotenv()
 
@@ -32,6 +37,205 @@ def get_tts_pipeline():
     if tts_pipeline is None:
         tts_pipeline = KPipeline(lang_code='b')
     return tts_pipeline
+
+
+def split_text_into_words(text: str) -> List[str]:
+    """Split text into words, preserving punctuation awareness."""
+    # Split by whitespace
+    words = text.split()
+    return [w for w in words if w]  # Remove empty strings
+
+
+def align_text_with_mfa(audio_path: str, text: str, mfa_container: str = "mfa_aligner") -> Dict:
+    """Use Montreal Forced Aligner to align text with audio and get timestamps.
+    
+    Args:
+        audio_path: Path to the audio file
+        text: Text to align with audio
+        mfa_container: Name of the MFA container
+        
+    Returns:
+        Dictionary with word-level timestamps:
+        {
+            "words": ["word1", "word2", ...],
+            "timestamps": [
+                {"word": "word1", "start": 0.0, "end": 0.5},
+                {"word": "word2", "start": 0.5, "end": 1.0},
+                ...
+            ]
+        }
+    """
+    try:
+        # Create temporary working directory
+        temp_dir = tempfile.mkdtemp()
+        
+        try:
+            # Copy audio to temp directory
+            audio_name = "audio.wav"
+            audio_in_container = os.path.join(temp_dir, audio_name)
+            shutil.copy(audio_path, audio_in_container)
+            
+            # Create TextGrid file (transcript format)
+            transcript_file = os.path.join(temp_dir, "audio.txt")
+            with open(transcript_file, 'w') as f:
+                f.write(text)
+            
+            # Run MFA alignment using subprocess calling into the container
+            # MFA command format: mfa align [input_dir] [output_dir] [acoustic_model] [language_model]
+            cmd = [
+                "mfa",
+                "align",
+                temp_dir,
+                temp_dir,
+                "english_us_arpa",
+                "english_us_arpa"
+            ]
+            
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=120
+            )
+            
+            if result.returncode != 0:
+                print(f"MFA alignment warning: {result.stderr}")
+                # Fallback to simple equal-duration timestamps if alignment fails
+                return _create_fallback_timestamps(text)
+            
+            # Parse the resulting TextGrid file to extract word timestamps
+            textgrid_file = os.path.join(temp_dir, "audio.TextGrid")
+            
+            if os.path.exists(textgrid_file):
+                timestamps = _parse_textgrid(textgrid_file, text)
+                return timestamps
+            else:
+                print("TextGrid file not found after alignment")
+                return _create_fallback_timestamps(text)
+                
+        finally:
+            # Clean up temporary directory
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            
+    except subprocess.TimeoutExpired:
+        print("MFA alignment timed out")
+        return _create_fallback_timestamps(text)
+    except Exception as e:
+        print(f"Error in MFA alignment: {str(e)}")
+        return _create_fallback_timestamps(text)
+
+
+def _parse_textgrid(textgrid_path: str, original_text: str) -> Dict:
+    """Parse TextGrid file and extract word-level timestamps.
+    
+    Args:
+        textgrid_path: Path to the TextGrid file from MFA
+        original_text: Original text for reference
+        
+    Returns:
+        Dictionary with words and timestamps
+    """
+    try:
+        words = split_text_into_words(original_text)
+        timestamps = []
+        
+        # Read TextGrid file
+        with open(textgrid_path, 'r') as f:
+            lines = f.readlines()
+        
+        # Simple TextGrid parser for words tier
+        in_words_tier = False
+        current_word_idx = 0
+        
+        for i, line in enumerate(lines):
+            line = line.strip()
+            
+            # Look for words tier
+            if 'name = "words"' in line or 'name = "word"' in line:
+                in_words_tier = True
+                continue
+            
+            # Look for intervals in words tier
+            if in_words_tier and line.startswith('intervals'):
+                # Parse interval format: intervals [n]:
+                # xmin = start_time
+                # xmax = end_time
+                # text = "word"
+                try:
+                    # Look ahead for xmin, xmax, and text
+                    j = i
+                    start_time = None
+                    end_time = None
+                    word_text = None
+                    
+                    while j < len(lines):
+                        curr = lines[j].strip()
+                        if 'xmin =' in curr:
+                            start_time = float(curr.split('=')[1].strip())
+                        elif 'xmax =' in curr:
+                            end_time = float(curr.split('=')[1].strip())
+                        elif 'text =' in curr:
+                            # Extract text between quotes
+                            word_text = curr.split('"')[1] if '"' in curr else ""
+                            break
+                        j += 1
+                    
+                    if word_text and start_time is not None and end_time is not None:
+                        timestamps.append({
+                            "word": word_text,
+                            "start": start_time,
+                            "end": end_time
+                        })
+                except (ValueError, IndexError):
+                    continue
+        
+        # If parsing failed or no timestamps found, use fallback
+        if not timestamps:
+            return _create_fallback_timestamps(original_text)
+        
+        return {
+            "words": [ts["word"] for ts in timestamps],
+            "timestamps": timestamps
+        }
+        
+    except Exception as e:
+        print(f"Error parsing TextGrid: {str(e)}")
+        return _create_fallback_timestamps(original_text)
+
+
+def _create_fallback_timestamps(text: str, duration: float = None) -> Dict:
+    """Create simple equal-duration timestamps as fallback.
+    
+    Args:
+        text: Text to create timestamps for
+        duration: Total duration in seconds (if known)
+        
+    Returns:
+        Dictionary with fallback word timestamps
+    """
+    words = split_text_into_words(text)
+    
+    if not words:
+        return {"words": [], "timestamps": []}
+    
+    # Default to 3 seconds total or use provided duration
+    total_duration = duration or 3.0
+    word_duration = total_duration / len(words)
+    
+    timestamps = []
+    for idx, word in enumerate(words):
+        start = idx * word_duration
+        end = (idx + 1) * word_duration
+        timestamps.append({
+            "word": word,
+            "start": round(start, 3),
+            "end": round(end, 3)
+        })
+    
+    return {
+        "words": words,
+        "timestamps": timestamps
+    }
 
 
 def format_text_with_gemini(raw_text: str) -> str:
@@ -204,18 +408,24 @@ def format_text():
 
 @app.route('/tts', methods=['POST'])
 def text_to_speech():
-    """Convert text to speech using Kokoro TTS.
+    """Convert text to speech using Kokoro TTS and align with Montreal Forced Aligner.
     
     Expects JSON with:
     {
         "text": "text to convert to speech",
-        "voice": "voice_id" (optional, defaults to 'af_heart')
+        "voice": "voice_id" (optional, defaults to 'af_heart'),
+        "use_alignment": true/false (optional, defaults to true)
     }
     
     Returns:
     {
         "audio": "base64-encoded audio data",
-        "sample_rate": 24000
+        "sample_rate": 24000,
+        "timestamps": [
+            {"word": "word1", "start": 0.0, "end": 0.5},
+            {"word": "word2", "start": 0.5, "end": 1.0},
+            ...
+        ]
     }
     """
     try:
@@ -225,6 +435,7 @@ def text_to_speech():
         
         text = data['text']
         voice = data.get('voice', 'af_heart')
+        use_alignment = data.get('use_alignment', True)
         
         if not text or not text.strip():
             return jsonify({"error": "Empty text"}), 400
@@ -252,10 +463,41 @@ def text_to_speech():
         audio_bytes = audio_buffer.getvalue()
         audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
         
-        return jsonify({
+        # Get word-level timestamps using MFA if requested
+        timestamps = None
+        if use_alignment:
+            try:
+                # Save audio to temporary file for MFA
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as tmp_audio:
+                    tmp_audio.write(audio_bytes)
+                    tmp_audio_path = tmp_audio.name
+                
+                try:
+                    # Get duration of audio in seconds
+                    audio_duration = len(audio_data) / 24000
+                    
+                    # Run alignment
+                    alignment_result = align_text_with_mfa(tmp_audio_path, text)
+                    timestamps = alignment_result.get('timestamps', [])
+                finally:
+                    # Clean up temporary audio file
+                    try:
+                        os.unlink(tmp_audio_path)
+                    except:
+                        pass
+            except Exception as e:
+                print(f"Warning: Could not get word timestamps: {str(e)}")
+                # Continue without timestamps rather than failing
+        
+        response = {
             "audio": audio_base64,
             "sample_rate": 24000
-        }), 200
+        }
+        
+        if timestamps:
+            response["timestamps"] = timestamps
+        
+        return jsonify(response), 200
     
     except Exception as e:
         return jsonify({"error": str(e)}), 500
