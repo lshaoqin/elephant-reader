@@ -38,6 +38,7 @@ export async function POST(req: Request) {
       return NextResponse.json({
         audio: data.audio,
         sample_rate: data.sample_rate,
+        timestamps: data.timestamps || [],
       });
     } catch (err) {
       return NextResponse.json(

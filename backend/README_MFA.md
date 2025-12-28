@@ -30,7 +30,7 @@ Once the MFA container is running, download the required language models:
 
 ```bash
 docker exec mfa_aligner mfa model download acoustic english_us_arpa
-docker exec mfa_aligner mfa model download language_model english_us_arpa
+docker exec mfa_aligner mfa model download dictionary english_us_arpa
 ```
 
 This downloads the English US acoustic and language models which are used for alignment.

@@ -10,12 +10,20 @@ import {
 } from "@radix-ui/react-icons";
 import { Button, Header, TextViewBox, LoadingSpinner, MediaPlayer } from "@/components";
 
+interface WordTimestamp {
+  word: string;
+  start: number;
+  end: number;
+}
+
 interface TextViewProps {
   displayText: string;
   isFormatting: boolean;
   isLoadingAudio: boolean;
   isPlayingAudio: boolean;
   audioRef: React.RefObject<HTMLAudioElement>;
+  wordTimestamps: WordTimestamp[];
+  currentPlaybackTime: number;
   onBackClick: () => void;
   onListen: () => void;
   onPlayPauseAudio: () => void;
@@ -29,6 +37,8 @@ export const TextView: React.FC<TextViewProps> = ({
   isLoadingAudio,
   isPlayingAudio,
   audioRef,
+  wordTimestamps,
+  currentPlaybackTime,
   onBackClick,
   onListen,
   onPlayPauseAudio,
@@ -52,6 +62,52 @@ export const TextView: React.FC<TextViewProps> = ({
     };
   }, [audioRef]);
 
+  // Create a function to parse text with word highlighting
+  const parseTextWithHighlight = (text: string): ReactNode => {
+    if (!wordTimestamps || wordTimestamps.length === 0) {
+      // If no timestamps, just use the markdown parser
+      return parseMarkdownText(text);
+    }
+
+    // Find which word should be highlighted
+    const currentWordIndex = wordTimestamps.findIndex(
+      (ts) => currentPlaybackTime >= ts.start && currentPlaybackTime < ts.end
+    );
+
+    // Split text into words while preserving original formatting
+    const words = text.split(/(\s+)/);
+    let wordIdx = 0;
+
+    return (
+      <>
+        {words.map((part, idx) => {
+          // If it's just whitespace, return as-is
+          if (/^\s+$/.test(part)) {
+            return <span key={idx}>{part}</span>;
+          }
+
+          // Check if this word corresponds to a highlighted timestamp
+          const shouldHighlight =
+            currentWordIndex >= 0 &&
+            wordIdx === currentWordIndex &&
+            wordTimestamps[currentWordIndex].word.toLowerCase() ===
+              part.toLowerCase().replace(/[^\w]/g, "");
+
+          wordIdx++;
+
+          return (
+            <span
+              key={idx}
+              className={shouldHighlight ? "bg-yellow-300 dark:bg-yellow-500 font-semibold rounded px-1" : ""}
+            >
+              {part}
+            </span>
+          );
+        })}
+      </>
+    );
+  };
+
   const showMediaPlayer = isLoadingAudio || isPlayingAudio || hasAudioLoaded;
 
   return (
@@ -67,7 +123,7 @@ export const TextView: React.FC<TextViewProps> = ({
             color="blue"
           />
         ) : (
-          <TextViewBox>{parseMarkdownText(displayText)}</TextViewBox>
+          <TextViewBox>{parseTextWithHighlight(displayText)}</TextViewBox>
         )}
       </div>
 

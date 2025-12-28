@@ -15,6 +15,7 @@ import subprocess
 import json
 import shutil
 import re
+import docker
 from typing import List, Tuple, Dict
 
 load_dotenv()
@@ -66,56 +67,76 @@ def align_text_with_mfa(audio_path: str, text: str, mfa_container: str = "mfa_al
         }
     """
     try:
-        # Create temporary working directory
-        temp_dir = tempfile.mkdtemp()
+        # Create working directories in shared volume
+        # Using /mfa_workdir which is shared between Flask and MFA containers
+        # MFA requires input and output to be separate directories
+        workdir = "/mfa_workdir"
+        os.makedirs(workdir, exist_ok=True)
+        
+        # Create unique subdirectories for this job (input and output separate)
+        import uuid
+        job_id = str(uuid.uuid4())[:8]
+        input_dir = os.path.join(workdir, f"mfa_input_{job_id}")
+        output_dir = os.path.join(workdir, f"mfa_output_{job_id}")
+        os.makedirs(input_dir, exist_ok=True)
+        os.makedirs(output_dir, exist_ok=True)
         
         try:
-            # Copy audio to temp directory
+            # Copy audio to input directory
             audio_name = "audio.wav"
-            audio_in_container = os.path.join(temp_dir, audio_name)
+            audio_in_container = os.path.join(input_dir, audio_name)
             shutil.copy(audio_path, audio_in_container)
             
-            # Create TextGrid file (transcript format)
-            transcript_file = os.path.join(temp_dir, "audio.txt")
+            # Strip markdown formatting from text for alignment
+            clean_text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)  # Remove bold markers
+            clean_text = re.sub(r'\*(.+?)\*', r'\1', text)  # Remove italic markers
+            clean_text = clean_text.strip()
+            
+            # Create transcript file in input directory
+            transcript_file = os.path.join(input_dir, "audio.txt")
             with open(transcript_file, 'w') as f:
-                f.write(text)
+                f.write(clean_text)
             
-            # Run MFA alignment using subprocess calling into the container
-            # MFA command format: mfa align [input_dir] [output_dir] [acoustic_model] [language_model]
-            cmd = [
-                "mfa",
-                "align",
-                temp_dir,
-                temp_dir,
-                "english_us_arpa",
-                "english_us_arpa"
-            ]
-            
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=120
-            )
-            
-            if result.returncode != 0:
-                print(f"MFA alignment warning: {result.stderr}")
-                # Fallback to simple equal-duration timestamps if alignment fails
-                return _create_fallback_timestamps(text)
+            # Run MFA alignment using Docker SDK
+            # Connect to Docker daemon via socket
+            try:
+                docker_client = docker.from_env()
+                container = docker_client.containers.get("mfa_aligner")
+                
+                # Run MFA align_one command for single file alignment
+                # Format: mfa align_one SOUND_FILE TEXT_FILE DICTIONARY ACOUSTIC_MODEL OUTPUT_PATH
+                output_textgrid = os.path.join(output_dir, "audio.TextGrid")
+                result = container.exec_run(
+                    cmd=f"mfa align_one {audio_in_container} {transcript_file} english_us_arpa english_us_arpa {output_textgrid}",
+                    workdir="/",
+                    stderr=True
+                )
+                
+                if result.exit_code != 0:
+                    print(f"MFA alignment error: {result.output.decode()}")
+                    return _create_fallback_timestamps(clean_text)
+                    
+            except Exception as e:
+                print(f"Error running MFA via Docker: {str(e)}")
+                return _create_fallback_timestamps(clean_text)
             
             # Parse the resulting TextGrid file to extract word timestamps
-            textgrid_file = os.path.join(temp_dir, "audio.TextGrid")
+            textgrid_file = os.path.join(output_dir, "audio.TextGrid")
             
             if os.path.exists(textgrid_file):
-                timestamps = _parse_textgrid(textgrid_file, text)
+                timestamps = _parse_textgrid(textgrid_file, clean_text)
                 return timestamps
             else:
                 print("TextGrid file not found after alignment")
-                return _create_fallback_timestamps(text)
+                return _create_fallback_timestamps(clean_text)
                 
         finally:
-            # Clean up temporary directory
-            shutil.rmtree(temp_dir, ignore_errors=True)
+            # Clean up working directories
+            for dir_path in [input_dir, output_dir]:
+                try:
+                    shutil.rmtree(dir_path, ignore_errors=True)
+                except:
+                    pass
             
     except subprocess.TimeoutExpired:
         print("MFA alignment timed out")
@@ -141,62 +162,87 @@ def _parse_textgrid(textgrid_path: str, original_text: str) -> Dict:
         
         # Read TextGrid file
         with open(textgrid_path, 'r') as f:
-            lines = f.readlines()
+            content = f.read()
         
-        # Simple TextGrid parser for words tier
+        lines = content.split('\n')
+        
+        # Find xmin and xmax of the file to understand time scale
+        file_xmin = None
+        file_xmax = None
+        
+        for line in lines[:50]:  # Check first 50 lines for file header
+            if line.strip().startswith('xmin'):
+                file_xmin = float(line.split('=')[1].strip())
+            elif line.strip().startswith('xmax'):
+                file_xmax = float(line.split('=')[1].strip())
+        
+        print(f"TextGrid time range: {file_xmin} to {file_xmax}")
+        
+        # Find words tier and parse intervals
         in_words_tier = False
-        current_word_idx = 0
+        i = 0
         
-        for i, line in enumerate(lines):
-            line = line.strip()
+        while i < len(lines):
+            line = lines[i].strip()
             
             # Look for words tier
-            if 'name = "words"' in line or 'name = "word"' in line:
+            if ('name = "words"' in line or 'name = "word"' in line or 'item [2]' in line):
                 in_words_tier = True
+                i += 1
                 continue
             
-            # Look for intervals in words tier
-            if in_words_tier and line.startswith('intervals'):
-                # Parse interval format: intervals [n]:
-                # xmin = start_time
-                # xmax = end_time
-                # text = "word"
+            # Exit words tier when we hit the next tier
+            if in_words_tier and line.startswith('item ['):
+                break
+            
+            # Parse intervals in words tier
+            if in_words_tier and 'intervals [' in line:
                 try:
-                    # Look ahead for xmin, xmax, and text
-                    j = i
                     start_time = None
                     end_time = None
                     word_text = None
                     
-                    while j < len(lines):
+                    # Look ahead for xmin, xmax, text
+                    j = i
+                    while j < len(lines) and j < i + 5:
                         curr = lines[j].strip()
-                        if 'xmin =' in curr:
+                        if 'xmin' in curr and '=' in curr:
                             start_time = float(curr.split('=')[1].strip())
-                        elif 'xmax =' in curr:
+                        elif 'xmax' in curr and '=' in curr:
                             end_time = float(curr.split('=')[1].strip())
-                        elif 'text =' in curr:
+                        elif 'text' in curr and '=' in curr:
                             # Extract text between quotes
-                            word_text = curr.split('"')[1] if '"' in curr else ""
+                            if '"' in curr:
+                                parts = curr.split('"')
+                                if len(parts) >= 2:
+                                    word_text = parts[1]
                             break
                         j += 1
                     
-                    if word_text and start_time is not None and end_time is not None:
+                    # Only add non-empty words
+                    if word_text and word_text.strip() and start_time is not None and end_time is not None:
                         timestamps.append({
                             "word": word_text,
-                            "start": start_time,
-                            "end": end_time
+                            "start": round(start_time, 3),
+                            "end": round(end_time, 3)
                         })
-                except (ValueError, IndexError):
-                    continue
+                except (ValueError, IndexError) as e:
+                    print(f"Error parsing interval: {e}")
+                    pass
+            
+            i += 1
         
-        # If parsing failed or no timestamps found, use fallback
-        if not timestamps:
+        print(f"Parsed {len(timestamps)} words from TextGrid")
+        
+        # If we got timestamps, return them
+        if timestamps:
+            return {
+                "words": [ts["word"] for ts in timestamps],
+                "timestamps": timestamps
+            }
+        else:
+            print("No timestamps found in TextGrid, using fallback")
             return _create_fallback_timestamps(original_text)
-        
-        return {
-            "words": [ts["word"] for ts in timestamps],
-            "timestamps": timestamps
-        }
         
     except Exception as e:
         print(f"Error parsing TextGrid: {str(e)}")
@@ -508,4 +554,4 @@ def health():
     return jsonify({"status": "ok"}), 200
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    app.run(debug=False, host='0.0.0.0', port=5000)

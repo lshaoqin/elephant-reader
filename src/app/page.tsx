@@ -21,6 +21,12 @@ interface ImageScale {
   naturalHeight?: number;
 }
 
+interface WordTimestamp {
+  word: string;
+  start: number;
+  end: number;
+}
+
 type ViewMode = "upload" | "image" | "text";
 
 // Function to parse markdown formatting (**text** -> bold)
@@ -65,6 +71,8 @@ export default function Page() {
   const [isLoadingAudio, setIsLoadingAudio] = useState(false);
   const [cachedAudioUrl, setCachedAudioUrl] = useState<string | null>(null);
   const [cachedAudioKey, setCachedAudioKey] = useState<string | null>(null);
+  const [wordTimestamps, setWordTimestamps] = useState<WordTimestamp[]>([]);
+  const [currentPlaybackTime, setCurrentPlaybackTime] = useState(0);
   const audioRef = React.useRef<HTMLAudioElement>(null!);
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -224,6 +232,13 @@ export default function Page() {
       setCachedAudioUrl(audioUrl);
       setCachedAudioKey(audioCacheKey);
 
+      // Store word timestamps if available
+      if (data.timestamps) {
+        setWordTimestamps(data.timestamps);
+      } else {
+        setWordTimestamps([]);
+      }
+
       // Play audio
       if (audioRef.current) {
         audioRef.current.src = audioUrl;
@@ -255,6 +270,7 @@ export default function Page() {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
       setIsPlayingAudio(false);
+      setCurrentPlaybackTime(0);
     }
   };
 
@@ -305,13 +321,23 @@ export default function Page() {
           isLoadingAudio={isLoadingAudio}
           isPlayingAudio={isPlayingAudio}
           audioRef={audioRef}
-          onBackClick={() => setViewMode("image")}
+          wordTimestamps={wordTimestamps}
+          currentPlaybackTime={currentPlaybackTime}
+          onBackClick={() => {
+            setViewMode("image");
+            setWordTimestamps([]);
+            setCurrentPlaybackTime(0);
+          }}
           onListen={handleListen}
           onPlayPauseAudio={handlePlayPauseAudio}
           onStopAudio={handleStopAudio}
           parseMarkdownText={parseMarkdownText}
         />
-        <audio ref={audioRef} onEnded={() => setIsPlayingAudio(false)} />
+        <audio 
+          ref={audioRef} 
+          onEnded={() => setIsPlayingAudio(false)}
+          onTimeUpdate={(e) => setCurrentPlaybackTime(e.currentTarget.currentTime)}
+        />
       </div>
     );
   }
