@@ -69,14 +69,45 @@ export const TextView: React.FC<TextViewProps> = ({
       return parseMarkdownText(text);
     }
 
-    // Find which word should be highlighted
-    const currentWordIndex = wordTimestamps.findIndex(
-      (ts) => currentPlaybackTime >= ts.start && currentPlaybackTime < ts.end
-    );
-
     // Split text into words while preserving original formatting
     const words = text.split(/(\s+)/);
-    let wordIdx = 0;
+    
+    // Find the current timestamp index
+    let currentTimestampIdx = wordTimestamps.findIndex(
+      (ts) => currentPlaybackTime >= ts.start && currentPlaybackTime < ts.end
+    );
+    
+    // Skip <eps> tokens - they represent silence, not actual words
+    while (currentTimestampIdx >= 0 && 
+           currentTimestampIdx < wordTimestamps.length && 
+           wordTimestamps[currentTimestampIdx]?.word === '<eps>') {
+      currentTimestampIdx++;
+    }
+    
+    let highlightWordIdx = -1;
+    
+    if (currentTimestampIdx >= 0 && currentTimestampIdx < wordTimestamps.length) {
+      const tsWord = wordTimestamps[currentTimestampIdx].word;
+      
+      // Handle special tokens
+      if (tsWord === '<unk>') {
+        // Unknown token - can't reliably match, skip highlighting
+        highlightWordIdx = -1;
+      } else if (tsWord !== '<eps>') {
+        // Build comparison function that ignores punctuation
+        const compareWord = (w: string) => w.toLowerCase().replace(/[^\w]/g, '');
+        const targetWord = compareWord(tsWord);
+        
+        // Search through text to find the matching word
+        // This handles cases where timestamps are out of sync
+        for (let i = 0; i < words.length; i++) {
+          if (!/^\s+$/.test(words[i]) && compareWord(words[i]) === targetWord) {
+            highlightWordIdx = i;
+            break;
+          }
+        }
+      }
+    }
 
     return (
       <>
@@ -86,14 +117,7 @@ export const TextView: React.FC<TextViewProps> = ({
             return <span key={idx}>{part}</span>;
           }
 
-          // Check if this word corresponds to a highlighted timestamp
-          const shouldHighlight =
-            currentWordIndex >= 0 &&
-            wordIdx === currentWordIndex &&
-            wordTimestamps[currentWordIndex].word.toLowerCase() ===
-              part.toLowerCase().replace(/[^\w]/g, "");
-
-          wordIdx++;
+          const shouldHighlight = idx === highlightWordIdx;
 
           return (
             <span
