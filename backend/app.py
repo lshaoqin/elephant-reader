@@ -185,17 +185,24 @@ def _parse_textgrid(textgrid_path: str, original_text: str) -> Dict:
         while i < len(lines):
             line = lines[i].strip()
             
-            # Look for words tier
-            if ('name = "words"' in line or 'name = "word"' in line or 'item [2]' in line):
-                in_words_tier = True
-                i += 1
-                continue
+            # Detect tier markers - check if this is the words tier
+            if line.startswith('item ['):
+                # Look ahead to see the tier name
+                if i + 1 < len(lines):
+                    for j in range(i + 1, min(i + 5, len(lines))):
+                        check_line = lines[j].strip()
+                        if 'name = "words"' in check_line or 'name = "word"' in check_line:
+                            in_words_tier = True
+                            break
+                        elif check_line.startswith('item ['):
+                            # Found next tier before finding words name
+                            in_words_tier = False
+                            break
+                    # If no tier name found, assume not words tier
+                    if 'name' not in ''.join(lines[i+1:min(i+5, len(lines))]):
+                        in_words_tier = False
             
-            # Exit words tier when we hit the next tier
-            if in_words_tier and line.startswith('item ['):
-                break
-            
-            # Parse intervals in words tier
+            # Parse intervals in words tier only
             if in_words_tier and 'intervals [' in line:
                 try:
                     start_time = None
@@ -219,8 +226,12 @@ def _parse_textgrid(textgrid_path: str, original_text: str) -> Dict:
                             break
                         j += 1
                     
-                    # Only add non-empty words
-                    if word_text and word_text.strip() and start_time is not None and end_time is not None:
+                    # Only add non-empty words (keep <eps>, exclude phonemes)
+                    # Phonemes are typically uppercase single letters or vowel codes like "AH1", "EY1", etc.
+                    # Words are typically lowercase or mixed case
+                    if (word_text and word_text.strip() and 
+                        word_text not in ['sil', '<SIL>'] and 
+                        start_time is not None and end_time is not None):
                         timestamps.append({
                             "word": word_text,
                             "start": round(start_time, 3),
@@ -229,6 +240,10 @@ def _parse_textgrid(textgrid_path: str, original_text: str) -> Dict:
                 except (ValueError, IndexError) as e:
                     print(f"Error parsing interval: {e}")
                     pass
+            
+            # Exit when we hit next tier (and we were in words tier)
+            if in_words_tier and line.startswith('item [') and 'name = "words"' not in ''.join(lines[i:min(i+4, len(lines))]):
+                in_words_tier = False
             
             i += 1
         
