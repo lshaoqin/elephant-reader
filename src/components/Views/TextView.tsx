@@ -62,6 +62,39 @@ export const TextView: React.FC<TextViewProps> = ({
     };
   }, [audioRef]);
 
+  // Build a mapping of timestamp index to word index at the start
+  const buildTimestampWordMap = (text: string): Map<number, number> => {
+    const map = new Map<number, number>();
+    if (!wordTimestamps || wordTimestamps.length === 0) {
+      return map;
+    }
+
+    const words = text.split(/(\s+)/);
+    const compareWord = (w: string) => w.toLowerCase().replace(/[^\w]/g, '');
+    
+    let lastFoundWordIdx = -1;
+
+    wordTimestamps.forEach((ts, tsIdx) => {
+      // Skip <eps> and <unk> tokens - they don't have word mappings
+      if (ts.word === '<eps>' || ts.word === '<unk>') {
+        return;
+      }
+
+      const targetWord = compareWord(ts.word);
+
+      // Search for the word starting from where we left off
+      for (let i = lastFoundWordIdx + 1; i < words.length; i++) {
+        if (!/^\s+$/.test(words[i]) && compareWord(words[i]) === targetWord) {
+          map.set(tsIdx, i);
+          lastFoundWordIdx = i;
+          break;
+        }
+      }
+    });
+
+    return map;
+  };
+
   // Create a function to parse text with word highlighting
   const parseTextWithHighlight = (text: string): ReactNode => {
     if (!wordTimestamps || wordTimestamps.length === 0) {
@@ -72,6 +105,9 @@ export const TextView: React.FC<TextViewProps> = ({
     // Split text into words while preserving original formatting
     const words = text.split(/(\s+)/);
     
+    // Build the timestamp to word index mapping
+    const timestampWordMap = buildTimestampWordMap(text);
+
     // Find the current timestamp index
     let currentTimestampIdx = wordTimestamps.findIndex(
       (ts) => currentPlaybackTime >= ts.start && currentPlaybackTime < ts.end
@@ -84,30 +120,8 @@ export const TextView: React.FC<TextViewProps> = ({
       currentTimestampIdx++;
     }
     
-    let highlightWordIdx = -1;
-    
-    if (currentTimestampIdx >= 0 && currentTimestampIdx < wordTimestamps.length) {
-      const tsWord = wordTimestamps[currentTimestampIdx].word;
-      
-      // Handle special tokens
-      if (tsWord === '<unk>') {
-        // Unknown token - can't reliably match, skip highlighting
-        highlightWordIdx = -1;
-      } else if (tsWord !== '<eps>') {
-        // Build comparison function that ignores punctuation
-        const compareWord = (w: string) => w.toLowerCase().replace(/[^\w]/g, '');
-        const targetWord = compareWord(tsWord);
-        
-        // Search through text to find the matching word
-        // This handles cases where timestamps are out of sync
-        for (let i = 0; i < words.length; i++) {
-          if (!/^\s+$/.test(words[i]) && compareWord(words[i]) === targetWord) {
-            highlightWordIdx = i;
-            break;
-          }
-        }
-      }
-    }
+    // Get the word index to highlight from our pre-built map
+    const highlightWordIdx = timestampWordMap.get(currentTimestampIdx) ?? -1;
 
     return (
       <>
