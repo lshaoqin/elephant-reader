@@ -70,13 +70,30 @@ export const TextView: React.FC<TextViewProps> = ({
     }
 
     const words = text.split(/(\s+)/);
-    const compareWord = (w: string) => w.toLowerCase().replace(/[^\w]/g, '');
+    const compareWord = (w: string) => w.toLowerCase().replace(/[^\w-]/g, '');
     
     let lastFoundWordIdx = -1;
+    let lastValidWordIdx = -1; // Track the last actual word highlighted
 
     wordTimestamps.forEach((ts, tsIdx) => {
-      // Skip <eps> and <unk> tokens - they don't have word mappings
-      if (ts.word === '<eps>' || ts.word === '<unk>') {
+      // Handle special tokens
+      if (ts.word === '<eps>') {
+        // For <eps> (silence), keep the previous word highlighted
+        if (lastValidWordIdx >= 0) {
+          map.set(tsIdx, lastValidWordIdx);
+        }
+        return;
+      } else if (ts.word === '<unk>') {
+        // For <unk> (unknown), highlight the next word
+        // Find the next non-whitespace word
+        for (let i = lastFoundWordIdx + 1; i < words.length; i++) {
+          if (!/^\s+$/.test(words[i])) {
+            map.set(tsIdx, i);
+            // lastFoundWordIdx = i;
+            lastValidWordIdx = i;
+            return;
+          }
+        }
         return;
       }
 
@@ -87,6 +104,7 @@ export const TextView: React.FC<TextViewProps> = ({
         if (!/^\s+$/.test(words[i]) && compareWord(words[i]) === targetWord) {
           map.set(tsIdx, i);
           lastFoundWordIdx = i;
+          lastValidWordIdx = i;
           break;
         }
       }
@@ -109,16 +127,9 @@ export const TextView: React.FC<TextViewProps> = ({
     const timestampWordMap = buildTimestampWordMap(text);
 
     // Find the current timestamp index
-    let currentTimestampIdx = wordTimestamps.findIndex(
+    const currentTimestampIdx = wordTimestamps.findIndex(
       (ts) => currentPlaybackTime >= ts.start && currentPlaybackTime < ts.end
     );
-    
-    // Skip <eps> tokens - they represent silence, not actual words
-    while (currentTimestampIdx >= 0 && 
-           currentTimestampIdx < wordTimestamps.length && 
-           wordTimestamps[currentTimestampIdx]?.word === '<eps>') {
-      currentTimestampIdx++;
-    }
     
     // Get the word index to highlight from our pre-built map
     const highlightWordIdx = timestampWordMap.get(currentTimestampIdx) ?? -1;
@@ -136,7 +147,7 @@ export const TextView: React.FC<TextViewProps> = ({
           return (
             <span
               key={idx}
-              className={shouldHighlight ? "bg-yellow-300 dark:bg-yellow-500 font-semibold rounded px-1" : ""}
+              className={shouldHighlight ? "bg-yellow-300 dark:bg-yellow-500" : ""}
             >
               {part}
             </span>
