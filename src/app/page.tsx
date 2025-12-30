@@ -74,6 +74,7 @@ export default function Page() {
   const [wordTimestamps, setWordTimestamps] = useState<WordTimestamp[]>([]);
   const [currentPlaybackTime, setCurrentPlaybackTime] = useState(0);
   const audioRef = React.useRef<HTMLAudioElement>(null!);
+  const ttsAbortControllerRef = React.useRef<AbortController | null>(null);
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -201,51 +202,96 @@ export default function Page() {
       return;
     }
 
-    // Load audio from API
+    // Load audio from API with streaming
     setIsLoadingAudio(true);
     setError(null);
 
+    // Abort any previous TTS request
+    if (ttsAbortControllerRef.current) {
+      ttsAbortControllerRef.current.abort();
+    }
+    ttsAbortControllerRef.current = new AbortController();
+
     try {
       const response = await fetch("/api/tts", {
+        signal: ttsAbortControllerRef.current.signal,
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: displayText }),
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to generate audio");
+        throw new Error("Failed to generate audio");
       }
 
-      const data = await response.json();
-      
-      // Decode base64 audio and create blob
-      const binaryString = atob(data.audio);
-      const bytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
-      const audioBlob = new Blob([bytes], { type: "audio/wav" });
-      const audioUrl = URL.createObjectURL(audioBlob);
-
-      // Cache the audio URL
-      setCachedAudioUrl(audioUrl);
-      setCachedAudioKey(audioCacheKey);
-
-      // Store word timestamps if available
-      if (data.timestamps) {
-        setWordTimestamps(data.timestamps);
-      } else {
-        setWordTimestamps([]);
+      // Handle streaming response with Server-Sent Events
+      if (!response.body) {
+        throw new Error("No response body");
       }
 
-      // Play audio
-      if (audioRef.current) {
-        audioRef.current.src = audioUrl;
-        audioRef.current.play();
-        setIsPlayingAudio(true);
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            const dataStr = line.slice(6);
+            try {
+              const data = JSON.parse(dataStr);
+
+              if (data.error) {
+                throw new Error(data.error);
+              }
+
+              if (data.status === "complete") {
+                // Final response received
+                // Decode base64 audio and create blob
+                const binaryString = atob(data.audio);
+                const bytes = new Uint8Array(binaryString.length);
+                for (let i = 0; i < binaryString.length; i++) {
+                  bytes[i] = binaryString.charCodeAt(i);
+                }
+                const audioBlob = new Blob([bytes], { type: "audio/wav" });
+                const audioUrl = URL.createObjectURL(audioBlob);
+
+                // Cache the audio URL
+                setCachedAudioUrl(audioUrl);
+                setCachedAudioKey(audioCacheKey);
+
+                // Store word timestamps if available
+                if (data.timestamps) {
+                  setWordTimestamps(data.timestamps);
+                } else {
+                  setWordTimestamps([]);
+                }
+
+                // Play audio
+                if (audioRef.current) {
+                  audioRef.current.src = audioUrl;
+                  audioRef.current.play();
+                  setIsPlayingAudio(true);
+                }
+              }
+              // Otherwise, just a progress update - can be used for UI later
+            } catch (parseErr) {
+              console.error("Failed to parse SSE data:", parseErr);
+            }
+          }
+        }
       }
     } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") {
+        console.log("TTS request was cancelled");
+        return;
+      }
       const msg = err instanceof Error ? err.message : String(err);
       setError(msg);
     } finally {
@@ -294,6 +340,11 @@ export default function Page() {
         selectedBlockIndex={selectedBlockIndex}
         formattingBlockIndex={formattingBlockIndex}
         onBackClick={() => {
+          // Abort any ongoing TTS request
+          if (ttsAbortControllerRef.current) {
+            ttsAbortControllerRef.current.abort();
+          }
+          setIsLoadingAudio(false);
           setViewMode("upload");
           // Clear audio cache when going back to upload
           setCachedAudioUrl(null);
@@ -324,6 +375,11 @@ export default function Page() {
           wordTimestamps={wordTimestamps}
           currentPlaybackTime={currentPlaybackTime}
           onBackClick={() => {
+            // Abort any ongoing TTS request
+            if (ttsAbortControllerRef.current) {
+              ttsAbortControllerRef.current.abort();
+            }
+            setIsLoadingAudio(false);
             setViewMode("image");
             setWordTimestamps([]);
             setCurrentPlaybackTime(0);

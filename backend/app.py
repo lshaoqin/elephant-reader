@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, stream_with_context
 from flask_cors import CORS
 from google.cloud import vision
 import google.genai as genai
@@ -471,6 +471,8 @@ def format_text():
 def text_to_speech():
     """Convert text to speech using Kokoro TTS and align with Montreal Forced Aligner.
     
+    Streams progress updates and returns final audio data.
+    
     Expects JSON with:
     {
         "text": "text to convert to speech",
@@ -478,17 +480,9 @@ def text_to_speech():
         "use_alignment": true/false (optional, defaults to true)
     }
     
-    Returns:
-    {
-        "audio": "base64-encoded audio data",
-        "sample_rate": 24000,
-        "timestamps": [
-            {"word": "word1", "start": 0.0, "end": 0.5},
-            {"word": "word2", "start": 0.5, "end": 1.0},
-            ...
-        ]
-    }
+    Returns a streaming response with progress events and final JSON data.
     """
+    # Parse request data outside of generator (while in request context)
     try:
         data = request.get_json()
         if not data or 'text' not in data:
@@ -500,68 +494,103 @@ def text_to_speech():
         
         if not text or not text.strip():
             return jsonify({"error": "Empty text"}), 400
-        
-        # Get TTS pipeline
-        pipeline = get_tts_pipeline()
-        
-        # Generate audio
-        generator = pipeline(text, voice=voice)
-        
-        # Collect all audio chunks from generator
-        audio_chunks = []
-        for gs, ps, audio in generator:
-            audio_chunks.append(audio)
-        
-        if not audio_chunks:
-            return jsonify({"error": "Failed to generate audio"}), 500
-        
-        # Concatenate all audio chunks
-        audio_data = np.concatenate(audio_chunks)
-        
-        # Convert audio to bytes and encode as base64
-        audio_buffer = io.BytesIO()
-        sf.write(audio_buffer, audio_data, 24000, format='WAV')
-        audio_bytes = audio_buffer.getvalue()
-        audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
-        
-        # Get word-level timestamps using MFA if requested
-        timestamps = None
-        if use_alignment:
-            try:
-                # Save audio to temporary file for MFA
-                with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as tmp_audio:
-                    tmp_audio.write(audio_bytes)
-                    tmp_audio_path = tmp_audio.name
-                
-                try:
-                    # Get duration of audio in seconds
-                    audio_duration = len(audio_data) / 24000
-                    
-                    # Run alignment
-                    alignment_result = align_text_with_mfa(tmp_audio_path, text)
-                    timestamps = alignment_result.get('timestamps', [])
-                finally:
-                    # Clean up temporary audio file
-                    try:
-                        os.unlink(tmp_audio_path)
-                    except:
-                        pass
-            except Exception as e:
-                print(f"Warning: Could not get word timestamps: {str(e)}")
-                # Continue without timestamps rather than failing
-        
-        response = {
-            "audio": audio_base64,
-            "sample_rate": 24000
-        }
-        
-        if timestamps:
-            response["timestamps"] = timestamps
-        
-        return jsonify(response), 200
-    
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": str(e)}), 400
+    
+    def generate():
+        try:
+            # Send starting status
+            yield f"data: {json.dumps({'status': 'generating', 'progress': 0})}\n\n"
+            
+            # Get TTS pipeline
+            pipeline = get_tts_pipeline()
+            
+            # Generate audio
+            generator = pipeline(text, voice=voice)
+            
+            # Collect all audio chunks from generator
+            audio_chunks = []
+            chunk_count = 0
+            try:
+                for gs, ps, audio in generator:
+                    audio_chunks.append(audio)
+                    chunk_count += 1
+                    # Send progress update
+                    yield f"data: {json.dumps({'status': 'generating', 'progress': chunk_count})}\n\n"
+            except (BrokenPipeError, ConnectionResetError) as e:
+                print(f"Client disconnected during audio generation: {str(e)}")
+                return
+            
+            if not audio_chunks:
+                yield f"data: {json.dumps({'error': 'Failed to generate audio'})}\n\n"
+                return
+            
+            # Concatenate all audio chunks
+            audio_data = np.concatenate(audio_chunks)
+            
+            # Convert audio to bytes and encode as base64
+            audio_buffer = io.BytesIO()
+            sf.write(audio_buffer, audio_data, 24000, format='WAV')
+            audio_bytes = audio_buffer.getvalue()
+            audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
+            
+            # Get word-level timestamps using MFA if requested
+            timestamps = None
+            if use_alignment:
+                try:
+                    yield f"data: {json.dumps({'status': 'aligning', 'progress': 0})}\n\n"
+                    
+                    # Save audio to temporary file for MFA
+                    with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as tmp_audio:
+                        tmp_audio.write(audio_bytes)
+                        tmp_audio_path = tmp_audio.name
+                    
+                    try:
+                        # Run alignment
+                        alignment_result = align_text_with_mfa(tmp_audio_path, text)
+                        timestamps = alignment_result.get('timestamps', [])
+                        
+                        yield f"data: {json.dumps({'status': 'aligning', 'progress': 100})}\n\n"
+                    finally:
+                        # Clean up temporary audio file
+                        try:
+                            os.unlink(tmp_audio_path)
+                        except:
+                            pass
+                except (BrokenPipeError, ConnectionResetError) as e:
+                    print(f"Client disconnected during alignment: {str(e)}")
+                    return
+                except Exception as e:
+                    print(f"Warning: Could not get word timestamps: {str(e)}")
+                    # Continue without timestamps rather than failing
+            
+            # Send final response
+            response_data = {
+                "status": "complete",
+                "audio": audio_base64,
+                "sample_rate": 24000
+            }
+            
+            if timestamps:
+                response_data["timestamps"] = timestamps
+            
+            yield f"data: {json.dumps(response_data)}\n\n"
+        
+        except (BrokenPipeError, ConnectionResetError) as e:
+            print(f"Client disconnected: {str(e)}")
+            return
+        except Exception as e:
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+    
+    return app.response_class(
+        stream_with_context(generate()),
+        mimetype='text/event-stream',
+        headers={
+            'Cache-Control': 'no-cache',
+            'X-Accel-Buffering': 'no',
+            'Connection': 'close'
+        }
+    )
 
 @app.route('/health', methods=['GET'])
 def health():
