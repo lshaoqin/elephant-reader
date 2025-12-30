@@ -120,11 +120,36 @@ export const TextView: React.FC<TextViewProps> = ({
       return parseMarkdownText(text);
     }
 
+    // Remove ** markers to get display text
+    const displayText = text.replace(/\*\*/g, "");
+
+    // Build a map of which character ranges are bold (from markdown)
+    const boldRanges: Array<{ start: number; end: number }> = [];
+    const regex = /\*\*(.+?)\*\*/g;
+    let match;
+    while ((match = regex.exec(text)) !== null) {
+      // Calculate the start and end positions in the display text (without **)
+      const starsBeforeBold = (text.substring(0, match.index).match(/\*\*/g) || []).length * 2;
+      const displayStart = match.index - starsBeforeBold;
+      const innerLength = match[1].length;
+      boldRanges.push({
+        start: displayStart,
+        end: displayStart + innerLength,
+      });
+    }
+
+    // Helper to check if a character range overlaps with a bold range
+    const isBold = (start: number, end: number) => {
+      return boldRanges.some(
+        (range) => start < range.end && end > range.start
+      );
+    };
+
     // Split text into words while preserving original formatting
-    const words = text.split(/(\s+)/);
+    const words = displayText.split(/(\s+)/);
     
-    // Build the timestamp to word index mapping
-    const timestampWordMap = buildTimestampWordMap(text);
+    // Build the timestamp to word index mapping (using displayText)
+    const timestampWordMap = buildTimestampWordMap(displayText);
 
     // Find the current timestamp index
     const currentTimestampIdx = wordTimestamps.findIndex(
@@ -134,21 +159,32 @@ export const TextView: React.FC<TextViewProps> = ({
     // Get the word index to highlight from our pre-built map
     const highlightWordIdx = timestampWordMap.get(currentTimestampIdx) ?? -1;
 
+    // Track character position in display text
+    let displayCharPos = 0;
+
     return (
       <>
         {words.map((part, idx) => {
+          const partStart = displayCharPos;
+          const partEnd = displayCharPos + part.length;
+          const shouldHighlight = idx === highlightWordIdx;
+          const shouldBold = isBold(partStart, partEnd);
+          displayCharPos = partEnd;
+
           // If it's just whitespace, return as-is
           if (/^\s+$/.test(part)) {
             return <span key={idx}>{part}</span>;
           }
 
-          const shouldHighlight = idx === highlightWordIdx;
+          const classes = [
+            shouldHighlight && "bg-yellow-300 dark:bg-yellow-500",
+            shouldBold && "font-semibold",
+          ]
+            .filter(Boolean)
+            .join(" ");
 
           return (
-            <span
-              key={idx}
-              className={shouldHighlight ? "bg-yellow-300 dark:bg-yellow-500" : ""}
-            >
+            <span key={idx} className={classes}>
               {part}
             </span>
           );
