@@ -23,6 +23,7 @@ interface WordDefinitionData {
   }>;
   meanings?: Meaning[];
   origin?: string;
+  syllables?: string[];
 }
 
 interface WordDefinitionPopoverProps {
@@ -141,6 +142,20 @@ export const WordDefinitionPopover: React.FC<WordDefinitionPopoverProps> = ({
                     </button>
                   )}
                 </div>
+
+                {/* Syllables */}
+                {data.syllables && data.syllables.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {data.syllables.map((syllable, idx) => (
+                      <div
+                        key={idx}
+                        className="px-4 py-2 border-2 border-blue-300 dark:border-blue-600 rounded-lg bg-blue-50 dark:bg-blue-900 text-blue-700 dark:text-blue-200 font-semibold text-base"
+                      >
+                        {syllable}
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 {/* Meanings */}
                 {data.meanings && data.meanings.length > 0 && (
