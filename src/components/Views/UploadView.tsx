@@ -72,29 +72,6 @@ export const UploadView: React.FC<UploadViewProps> = ({
             />
           </label>
         </div>
-
-        <div className="grid grid-cols-2 gap-6 w-full max-w-2xl mt-4">
-          <button className="flex flex-col items-center justify-center p-8 border-4 border-gray-400 rounded-xl hover:border-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-950 transition-all group">
-            <FileTextIcon className="w-20 h-20 mb-3 text-gray-600 dark:text-gray-400 group-hover:text-yellow-500 transition-colors" />
-            <span
-              className="text-base text-center font-bold text-gray-700 dark:text-gray-300"
-              style={{ fontFamily: "Verdana, Arial, Helvetica, sans-serif" }}
-            >
-              My previous files
-            </span>
-          </button>
-
-          <button className="flex flex-col items-center justify-center p-8 border-4 border-gray-400 rounded-xl hover:border-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-950 transition-all group">
-            <ReaderIcon className="w-20 h-20 mb-3 text-gray-600 dark:text-gray-400 group-hover:text-yellow-500 transition-colors" />
-            <span
-              className="text-base text-center font-bold text-gray-700 dark:text-gray-300"
-              style={{ fontFamily: "Verdana, Arial, Helvetica, sans-serif" }}
-            >
-              Discover others&apos; files
-            </span>
-          </button>
-        </div>
-
         {loading && (
           <LoadingSpinner
             label="Extracting and formatting text…"
