@@ -26,10 +26,12 @@ def format_text_with_gemini(raw_text: str) -> str:
 4. Bold section titles or headings using **text** format
 5. Preserve the overall structure and meaning of the original text
 
+IMPORTANT: Only format and correct the text provided. Do NOT generate, add, or expand content beyond what is given. Do NOT write articles, stories, or additional text.
+
 Original OCR text:
 {raw_text}
 
-Please provide the corrected, formatted text only. Do not add any explanations or metadata."""
+Please provide the corrected, formatted text only. Do not add any explanations, metadata, or additional content."""
 
         response = genai_client.models.generate_content(
             model=GEMINI_MODEL,
