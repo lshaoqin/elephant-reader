@@ -1,8 +1,31 @@
 """Define word endpoint."""
 from flask import request, jsonify, Blueprint
 import requests
+from pyphen import Pyphen
 
 define_word_bp = Blueprint('define_word', __name__)
+
+# Initialize hyphenator for English
+hyphenator = Pyphen(lang='en_US')
+
+
+def get_syllabification(word: str) -> list:
+    """Get syllabification of a word using pyphen.
+    
+    Args:
+        word: The word to syllabify
+        
+    Returns:
+        List of syllables
+    """
+    try:
+        # pyphen uses hyphens for syllable breaks
+        hyphenated = hyphenator.inserted(word)
+        # Split by hyphen to get syllables
+        syllables = hyphenated.split('-')
+        return [s for s in syllables if s]  # Remove empty strings
+    except Exception:
+        return []
 
 
 @define_word_bp.route('/define-word', methods=['POST'])
@@ -41,7 +64,12 @@ def define_word():
         
         # Return the API response as-is
         data = response.json()
-        return jsonify(data[0]), 200
+        result = data[0]
+        
+        # Add syllabification
+        result['syllables'] = get_syllabification(word)
+        
+        return jsonify(result), 200
     
     except requests.Timeout:
         return jsonify({"error": "Request timeout"}), 504
