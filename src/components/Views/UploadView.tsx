@@ -50,6 +50,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
             <input
               type="file"
               accept="image/*"
+              capture="environment"
               onChange={onFileChange}
               className="hidden"
             />
@@ -65,7 +66,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
             </span>
             <input
               type="file"
-              accept="image/*,application/pdf"
+              accept="image/*"
               onChange={onFileChange}
               className="hidden"
             />
