@@ -4,8 +4,6 @@ import React from "react";
 import {
   CameraIcon,
   UploadIcon,
-  FileTextIcon,
-  ReaderIcon,
 } from "@radix-ui/react-icons";
 import { LoadingSpinner, ViewBox } from "@/components";
 

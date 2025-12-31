@@ -379,7 +379,16 @@ export default function Page() {
             if (ttsAbortControllerRef.current) {
               ttsAbortControllerRef.current.abort();
             }
+            // Stop and clear cached audio
+            if (audioRef.current) {
+              audioRef.current.pause();
+              audioRef.current.currentTime = 0;
+              audioRef.current.src = '';
+            }
+            setIsPlayingAudio(false);
             setIsLoadingAudio(false);
+            setCachedAudioUrl(null);
+            setCachedAudioKey(null);
             setViewMode("image");
             setWordTimestamps([]);
             setCurrentPlaybackTime(0);
