@@ -61,7 +61,7 @@ def align_text_with_mfa(audio_path: str, text: str, mfa_container: str = MFA_CON
             
             if exit_code != 0:
                 print(f"MFA alignment error: {output.decode()}")
-                return _create_fallback_timestamps(clean_text)
+                return {"words": [], "timestamps": []}
             
             # Parse the resulting TextGrid file
             textgrid_file = os.path.join(output_dir, "audio.TextGrid")
@@ -71,7 +71,7 @@ def align_text_with_mfa(audio_path: str, text: str, mfa_container: str = MFA_CON
                 return timestamps
             else:
                 print("TextGrid file not found after alignment")
-                return _create_fallback_timestamps(clean_text)
+                return {"words": [], "timestamps": []}
                 
         finally:
             # Clean up working directories
@@ -83,7 +83,7 @@ def align_text_with_mfa(audio_path: str, text: str, mfa_container: str = MFA_CON
             
     except Exception as e:
         print(f"Error in MFA alignment: {str(e)}")
-        return _create_fallback_timestamps(text)
+        return {"words": [], "timestamps": []}
 
 
 def _parse_textgrid(textgrid_path: str, original_text: str) -> Dict:
@@ -189,44 +189,9 @@ def _parse_textgrid(textgrid_path: str, original_text: str) -> Dict:
                 "timestamps": timestamps
             }
         else:
-            print("No timestamps found in TextGrid, using fallback")
-            return _create_fallback_timestamps(original_text)
+            print("No timestamps found in TextGrid")
+            return {"words": [], "timestamps": []}
         
     except Exception as e:
         print(f"Error parsing TextGrid: {str(e)}")
-        return _create_fallback_timestamps(original_text)
-
-
-def _create_fallback_timestamps(text: str, duration: float = None) -> Dict:
-    """Create simple equal-duration timestamps as fallback.
-    
-    Args:
-        text: Text to create timestamps for
-        duration: Total duration in seconds (if known)
-        
-    Returns:
-        Dictionary with fallback word timestamps
-    """
-    words = split_text_into_words(text)
-    
-    if not words:
         return {"words": [], "timestamps": []}
-    
-    # Default to 3 seconds total or use provided duration
-    total_duration = duration or 3.0
-    word_duration = total_duration / len(words)
-    
-    timestamps = []
-    for idx, word in enumerate(words):
-        start = idx * word_duration
-        end = (idx + 1) * word_duration
-        timestamps.append({
-            "word": word,
-            "start": round(start, 3),
-            "end": round(end, 3)
-        })
-    
-    return {
-        "words": words,
-        "timestamps": timestamps
-    }
