@@ -1,0 +1,292 @@
+"use client";
+
+import React from "react";
+import { Header } from "@/components";
+
+export interface TextSettings {
+  fontFamily: string;
+  fontSize: number;
+  fontColor: string;
+  lineSpacing: number;
+  backgroundColor: string;
+}
+
+interface SettingsViewProps {
+  settings: TextSettings;
+  onSettingsChange: (settings: TextSettings) => void;
+  onBackClick: () => void;
+}
+
+const FONT_FAMILIES = [
+  { name: "Verdana", value: "Verdana, Arial, Helvetica, sans-serif" },
+  { name: "Arial", value: "Arial, sans-serif" },
+  { name: "Georgia", value: "Georgia, serif" },
+  { name: "Times New Roman", value: "Times New Roman, serif" },
+  { name: "Courier New", value: "Courier New, monospace" },
+  { name: "Comic Sans MS", value: "Comic Sans MS, cursive" },
+];
+
+const FONT_SIZES = [14, 16, 18, 20, 22, 24, 28, 32];
+
+const LINE_SPACINGS = [1, 1.2, 1.5, 1.8, 2];
+
+const BACKGROUND_COLORS = [
+  { name: "Light Yellow", value: "#fffef5" },
+  { name: "Light Green", value: "#f9fcfb" },
+  { name: "Light Blue", value: "#f5fcff" },
+  { name: "Light Gray", value: "#f7f8f9" },
+  { name: "Beige", value: "#fef9ed" },
+  { name: "Light Pink", value: "#fefbfb" },
+  { name: "White", value: "#ffffff" },
+];
+
+const FONT_COLORS = [
+  { name: "Black", value: "#1a1a1a" },
+  { name: "Dark Gray", value: "#6b7280" },
+  { name: "Blue", value: "#3b82f6" },
+  { name: "Dark Green", value: "#34d399" },
+  { name: "Dark Red", value: "#ef4444" },
+  { name: "Dark Purple", value: "#a78bfa" },
+];
+
+export const SettingsView: React.FC<SettingsViewProps> = ({
+  settings,
+  onSettingsChange,
+  onBackClick,
+}) => {
+  const handleFontChange = (fontFamily: string) => {
+    onSettingsChange({ ...settings, fontFamily });
+  };
+
+  const handleFontSizeChange = (fontSize: number) => {
+    onSettingsChange({ ...settings, fontSize });
+  };
+
+  const handleFontColorChange = (fontColor: string) => {
+    onSettingsChange({ ...settings, fontColor });
+  };
+
+  const handleLineSpacingChange = (lineSpacing: number) => {
+    onSettingsChange({ ...settings, lineSpacing });
+  };
+
+  const handleBackgroundColorChange = (backgroundColor: string) => {
+    onSettingsChange({ ...settings, backgroundColor });
+  };
+
+  const handleRestoreDefaults = () => {
+    onSettingsChange({
+      fontFamily: "Verdana, Arial, Helvetica, sans-serif",
+      fontSize: 20,
+      fontColor: "#000000",
+      lineSpacing: 1.5,
+      backgroundColor: "#fffbeb",
+    });
+  };
+
+  return (
+    <div
+      className="flex flex-col h-screen w-screen"
+      style={{ backgroundColor: settings.backgroundColor }}
+    >
+      <Header onBackClick={onBackClick} showSettings={false} />
+
+      <div className="flex-1 overflow-auto p-6 sm:p-8 lg:p-12">
+        <div className="max-w-2xl mx-auto">
+          <h1
+            className="text-3xl font-bold mb-8"
+            style={{
+              fontFamily: settings.fontFamily,
+              color: settings.fontColor,
+            }}
+          >
+            Text Settings
+          </h1>
+
+          {/* Font Selection */}
+          <div className="mb-8">
+            <label
+              className="block text-lg font-semibold mb-4"
+              style={{
+                fontFamily: settings.fontFamily,
+                color: settings.fontColor,
+              }}
+            >
+              Font Type
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              {FONT_FAMILIES.map((font) => (
+                <button
+                  key={font.value}
+                  onClick={() => handleFontChange(font.value)}
+                  className={`p-3 rounded-lg border-2 transition-all ${
+                    settings.fontFamily === font.value
+                      ? "border-blue-600 bg-blue-100 dark:bg-blue-900"
+                      : "border-gray-300 dark:border-gray-600 hover:border-blue-400"
+                  }`}
+                  style={{ fontFamily: font.value }}
+                >
+                  {font.name}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Font Size Selection */}
+          <div className="mb-8">
+            <label
+              className="block text-lg font-semibold mb-4"
+              style={{
+                fontFamily: settings.fontFamily,
+                color: settings.fontColor,
+              }}
+            >
+              Font Size: {settings.fontSize}px
+            </label>
+            <input
+              type="range"
+              min="12"
+              max="40"
+              step="2"
+              value={settings.fontSize}
+              onChange={(e) => handleFontSizeChange(Number(e.target.value))}
+              className="w-full h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer"
+            />
+          </div>
+
+          {/* Font Color Selection */}
+          <div className="mb-8">
+            <label
+              className="block text-lg font-semibold mb-4"
+              style={{
+                fontFamily: settings.fontFamily,
+                color: settings.fontColor,
+              }}
+            >
+              Font Color
+            </label>
+            <div className="grid grid-cols-3 gap-3">
+              {FONT_COLORS.map((color) => (
+                <button
+                  key={color.value}
+                  onClick={() => handleFontColorChange(color.value)}
+                  className={`p-4 rounded-lg border-2 transition-all flex items-center gap-2 ${
+                    settings.fontColor === color.value
+                      ? "border-blue-600 bg-blue-100 dark:bg-blue-900"
+                      : "border-gray-300 dark:border-gray-600 hover:border-blue-400"
+                  }`}
+                >
+                  <div
+                    className="w-6 h-6 rounded"
+                    style={{ backgroundColor: color.value }}
+                  />
+                  <span style={{ fontFamily: settings.fontFamily }}>
+                    {color.name}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Line Spacing Selection */}
+          <div className="mb-8">
+            <label
+              className="block text-lg font-semibold mb-4"
+              style={{
+                fontFamily: settings.fontFamily,
+                color: settings.fontColor,
+              }}
+            >
+              Line Spacing: {settings.lineSpacing}x
+            </label>
+            <div className="grid grid-cols-5 gap-3">
+              {LINE_SPACINGS.map((spacing) => (
+                <button
+                  key={spacing}
+                  onClick={() => handleLineSpacingChange(spacing)}
+                  className={`p-3 rounded-lg border-2 transition-all ${
+                    settings.lineSpacing === spacing
+                      ? "border-blue-600 bg-blue-100 dark:bg-blue-900"
+                      : "border-gray-300 dark:border-gray-600 hover:border-blue-400"
+                  }`}
+                  style={{
+                    fontFamily: settings.fontFamily,
+                    color: settings.fontColor,
+                  }}
+                >
+                  {spacing}x
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Background Color Selection */}
+          <div className="mb-8">
+            <label
+              className="block text-lg font-semibold mb-4"
+              style={{
+                fontFamily: settings.fontFamily,
+                color: settings.fontColor,
+              }}
+            >
+              Background Color
+            </label>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+              {BACKGROUND_COLORS.map((color) => (
+                <button
+                  key={color.value}
+                  onClick={() => handleBackgroundColorChange(color.value)}
+                  className={`p-6 rounded-lg border-3 transition-all flex flex-col items-center gap-2 ${
+                    settings.backgroundColor === color.value
+                      ? "border-blue-600"
+                      : "border-gray-300 dark:border-gray-600 hover:border-blue-400"
+                  }`}
+                  style={{ backgroundColor: color.value }}
+                >
+                  <span
+                    className="text-sm font-medium"
+                    style={{
+                      fontFamily: settings.fontFamily,
+                      color: settings.fontColor,
+                    }}
+                  >
+                    {color.name}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Restore Defaults Button */}
+          <div className="mb-8 flex justify-center">
+            <button
+              onClick={handleRestoreDefaults}
+              className="px-6 py-3 bg-gray-500 hover:bg-gray-600 text-white font-semibold rounded-lg transition-colors"
+              style={{ fontFamily: settings.fontFamily }}
+            >
+              Restore Defaults
+            </button>
+          </div>
+
+          {/* Preview */}
+          <div className="mt-12 p-6 border-2 border-gray-300 dark:border-gray-600 rounded-lg">
+            <p
+              className="text-base leading-relaxed"
+              style={{
+                fontFamily: settings.fontFamily,
+                fontSize: `${settings.fontSize}px`,
+                color: settings.fontColor,
+                lineHeight: settings.lineSpacing,
+              }}
+            >
+              This is a preview of your text settings. You can see how the font,
+              size, color, and line spacing look with your current selections.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default SettingsView;

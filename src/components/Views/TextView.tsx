@@ -9,6 +9,7 @@ import {
   BookmarkIcon,
 } from "@radix-ui/react-icons";
 import { Button, Header, TextViewBox, LoadingSpinner, MediaPlayer, WordDefinitionPopover } from "@/components";
+import type { TextSettings } from "./SettingsView";
 
 interface WordTimestamp {
   word: string;
@@ -25,10 +26,12 @@ interface TextViewProps {
   wordTimestamps: WordTimestamp[];
   currentPlaybackTime: number;
   onBackClick: () => void;
+  onSettingsClick: () => void;
   onListen: () => void;
   onPlayPauseAudio: () => void;
   onStopAudio: () => void;
   parseMarkdownText: (text: string) => ReactNode;
+  settings: TextSettings;
 }
 
 export const TextView: React.FC<TextViewProps> = ({
@@ -40,10 +43,12 @@ export const TextView: React.FC<TextViewProps> = ({
   wordTimestamps,
   currentPlaybackTime,
   onBackClick,
+  onSettingsClick,
   onListen,
   onPlayPauseAudio,
   onStopAudio,
   parseMarkdownText,
+  settings,
 }) => {
   const [hasAudioLoaded, setHasAudioLoaded] = useState(false);
   const [selectedWord, setSelectedWord] = useState<string | null>(null);
@@ -264,8 +269,11 @@ export const TextView: React.FC<TextViewProps> = ({
         isOpen={isPopoverOpen}
         onClose={() => setIsPopoverOpen(false)}
       />
-      <div className="flex flex-col h-screen w-screen bg-white dark:bg-slate-950">
-        <Header onBackClick={onBackClick} />
+      <div
+        className="flex flex-col h-screen w-screen"
+        style={{ backgroundColor: settings.backgroundColor }}
+      >
+        <Header onBackClick={onBackClick} onSettingsClick={onSettingsClick} />
 
       {/* Text Content */}
       <div className="flex-1 overflow-auto p-6 sm:p-8 lg:p-12 flex flex-col items-start justify-start">
@@ -278,7 +286,16 @@ export const TextView: React.FC<TextViewProps> = ({
             />
           </div>
         ) : (
-          <TextViewBox className="text-base sm:text-lg lg:text-xl leading-relaxed">
+          <TextViewBox
+            style={{
+              fontFamily: settings.fontFamily,
+              fontSize: `${settings.fontSize}px`,
+              color: settings.fontColor,
+              lineHeight: settings.lineSpacing,
+              backgroundColor: settings.backgroundColor,
+            }}
+            className="text-base sm:text-lg lg:text-xl leading-relaxed"
+          >
             {parseTextWithHighlight(displayText)}
           </TextViewBox>
         )}

@@ -3,6 +3,7 @@ import { ArrowLeftIcon, GearIcon, PersonIcon } from "@radix-ui/react-icons";
 
 interface HeaderProps {
   onBackClick?: () => void;
+  onSettingsClick?: () => void;
   showBackButton?: boolean;
   showSettings?: boolean;
   showProfile?: boolean;
@@ -14,6 +15,7 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({
   onBackClick,
+  onSettingsClick,
   showBackButton = true,
   showSettings = true,
   showProfile = true,
@@ -66,7 +68,7 @@ export const Header: React.FC<HeaderProps> = ({
       {/* Right: Settings & Profile Icons */}
       <div className="flex gap-6">
         {showSettings && (
-          <button className="text-gray-600 dark:text-gray-400 hover:text-yellow-500 transition-colors">
+          <button onClick={onSettingsClick} className="text-gray-600 dark:text-gray-400 hover:text-yellow-500 transition-colors">
             <GearIcon className="w-7 h-7" />
           </button>
         )}

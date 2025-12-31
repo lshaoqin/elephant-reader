@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState, ReactNode } from "react";
-import { UploadView, ImageView, TextView } from "@/components/Views";
+import { UploadView, ImageView, TextView, SettingsView } from "@/components/Views";
+import type { TextSettings } from "@/components/Views/SettingsView";
 
 interface TextBlock {
   text: string;
@@ -27,7 +28,7 @@ interface WordTimestamp {
   end: number;
 }
 
-type ViewMode = "upload" | "image" | "text";
+type ViewMode = "upload" | "image" | "text" | "settings";
 
 // Function to parse markdown formatting (**text** -> bold)
 function parseMarkdownText(text: string): ReactNode {
@@ -73,6 +74,14 @@ export default function Page() {
   const [cachedAudioKey, setCachedAudioKey] = useState<string | null>(null);
   const [wordTimestamps, setWordTimestamps] = useState<WordTimestamp[]>([]);
   const [currentPlaybackTime, setCurrentPlaybackTime] = useState(0);
+  const [settings, setSettings] = useState<TextSettings>({
+    fontFamily: "Verdana, Arial, Helvetica, sans-serif",
+    fontSize: 20,
+    fontColor: "#000000",
+    lineSpacing: 1.5,
+    backgroundColor: "#fffbeb",
+  });
+  const [previousViewMode, setPreviousViewMode] = useState<ViewMode>("upload");
   const audioRef = React.useRef<HTMLAudioElement>(null!);
   const ttsAbortControllerRef = React.useRef<AbortController | null>(null);
 
@@ -374,6 +383,7 @@ export default function Page() {
           audioRef={audioRef}
           wordTimestamps={wordTimestamps}
           currentPlaybackTime={currentPlaybackTime}
+          settings={settings}
           onBackClick={() => {
             // Abort any ongoing TTS request
             if (ttsAbortControllerRef.current) {
@@ -393,6 +403,10 @@ export default function Page() {
             setWordTimestamps([]);
             setCurrentPlaybackTime(0);
           }}
+          onSettingsClick={() => {
+            setPreviousViewMode("text");
+            setViewMode("settings");
+          }}
           onListen={handleListen}
           onPlayPauseAudio={handlePlayPauseAudio}
           onStopAudio={handleStopAudio}
@@ -404,6 +418,17 @@ export default function Page() {
           onTimeUpdate={(e) => setCurrentPlaybackTime(e.currentTarget.currentTime)}
         />
       </div>
+    );
+  }
+
+  // Settings View
+  if (viewMode === "settings") {
+    return (
+      <SettingsView
+        settings={settings}
+        onSettingsChange={setSettings}
+        onBackClick={() => setViewMode(previousViewMode)}
+      />
     );
   }
 

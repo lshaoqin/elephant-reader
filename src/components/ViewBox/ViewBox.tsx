@@ -41,11 +41,13 @@ export const ViewBox: React.FC<ViewBoxProps> = ({
 interface TextViewBoxProps {
   children: ReactNode;
   className?: string;
+  style?: React.CSSProperties;
 }
 
 export const TextViewBox: React.FC<TextViewBoxProps> = ({
   children,
   className = "",
+  style = {},
 }) => {
   const dyslexiaStyles: React.CSSProperties = {
     fontFamily: "Verdana, Arial, Helvetica, sans-serif",
@@ -63,7 +65,7 @@ export const TextViewBox: React.FC<TextViewBoxProps> = ({
   };
 
   return (
-    <div style={dyslexiaStyles} className={`mx-auto max-w-4xl w-full ${className}`}>
+    <div style={{ ...dyslexiaStyles, ...style }} className={`mx-auto max-w-4xl w-full ${className}`}>
       {children}
     </div>
   );
