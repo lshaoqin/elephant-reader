@@ -49,7 +49,7 @@ export const TextViewBox: React.FC<TextViewBoxProps> = ({
 }) => {
   const dyslexiaStyles: React.CSSProperties = {
     fontFamily: "Verdana, Arial, Helvetica, sans-serif",
-    fontSize: "20px",
+    fontSize: "clamp(18px, 2.5vw, 24px)",
     lineHeight: 1.8,
     letterSpacing: "0.03em",
     wordSpacing: "0.12em",
@@ -63,7 +63,7 @@ export const TextViewBox: React.FC<TextViewBoxProps> = ({
   };
 
   return (
-    <div style={dyslexiaStyles} className={`mx-auto max-w-4xl ${className}`}>
+    <div style={dyslexiaStyles} className={`mx-auto max-w-4xl w-full ${className}`}>
       {children}
     </div>
   );

@@ -200,15 +200,19 @@ export const TextView: React.FC<TextViewProps> = ({
       <Header onBackClick={onBackClick} />
 
       {/* Text Content */}
-      <div className="flex-1 overflow-auto p-8 lg:p-16 flex items-center justify-center">
+      <div className="flex-1 overflow-auto p-6 sm:p-8 lg:p-12 flex flex-col items-start justify-start">
         {isFormatting ? (
-          <LoadingSpinner
-            label="Formatting text…"
-            size="md"
-            color="blue"
-          />
+          <div className="flex items-center justify-center w-full h-full">
+            <LoadingSpinner
+              label="Formatting text…"
+              size="md"
+              color="blue"
+            />
+          </div>
         ) : (
-          <TextViewBox>{parseTextWithHighlight(displayText)}</TextViewBox>
+          <TextViewBox className="text-base sm:text-lg lg:text-xl leading-relaxed">
+            {parseTextWithHighlight(displayText)}
+          </TextViewBox>
         )}
       </div>
 
