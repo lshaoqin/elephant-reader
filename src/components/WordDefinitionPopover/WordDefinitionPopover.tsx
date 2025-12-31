@@ -144,7 +144,12 @@ export const WordDefinitionPopover: React.FC<WordDefinitionPopoverProps> = ({
                 </div>
 
                 {/* Syllables */}
-                {data.syllables && data.syllables.length > 0 && (
+                {data.syllables &&
+                  data.syllables.length > 0 &&
+                  !(
+                    data.syllables.length === 1 &&
+                    data.syllables[0].toLowerCase() === data.word.toLowerCase()
+                  ) && (
                   <div className="flex flex-wrap gap-2">
                     {data.syllables.map((syllable, idx) => (
                       <div
