@@ -104,7 +104,25 @@ export const WordDefinitionPopover: React.FC<WordDefinitionPopoverProps> = ({
                 <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
               </div>
             ) : error ? (
-              <div className="text-red-500 text-base">{error}</div>
+              <div className="space-y-4 py-8">
+                <div className="text-center">
+                  <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+                    Word not found
+                  </h3>
+                  <p className="text-base text-gray-600 dark:text-gray-400 mb-6">
+                    We couldn&apos;t find a definition for &quot;{word}&quot; in our dictionary.
+                  </p>
+                  <button
+                    onClick={() => {
+                      const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(word)}`;
+                      window.open(searchUrl, "_blank");
+                    }}
+                    className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors"
+                  >
+                    Search on Google
+                  </button>
+                </div>
+              </div>
             ) : data ? (
               <div className="space-y-5">
                 {/* Word and Audio Button */}
@@ -150,22 +168,26 @@ export const WordDefinitionPopover: React.FC<WordDefinitionPopoverProps> = ({
                     ))}
                   </div>
                 )}
-
-                {/* Origin */}
-                {data.origin && (
-                  <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
-                    <p className="text-base font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                      Origin
-                    </p>
-                    <p className="text-base text-gray-600 dark:text-gray-400">
-                      {data.origin}
-                    </p>
-                  </div>
-                )}
               </div>
-          ) : (
-            <div className="text-gray-500 text-sm">No definition found</div>
-          )}
+            ) : (
+              <div className="space-y-4 py-8 text-center">
+                <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+                  Word not found
+                </h3>
+                <p className="text-base text-gray-600 dark:text-gray-400 mb-6">
+                  We couldn&apos;t find a definition for &quot;{word}&quot;.
+                </p>
+                <button
+                  onClick={() => {
+                    const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(word)}`;
+                    window.open(searchUrl, "_blank");
+                  }}
+                  className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors"
+                >
+                  Search on Google
+                </button>
+              </div>
+            )}
 
             <button
               className="absolute top-2 right-2 p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
