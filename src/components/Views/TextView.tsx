@@ -8,7 +8,7 @@ import {
   Pencil2Icon,
   BookmarkIcon,
 } from "@radix-ui/react-icons";
-import { Button, Header, TextViewBox, LoadingSpinner, MediaPlayer } from "@/components";
+import { Button, Header, TextViewBox, LoadingSpinner, MediaPlayer, WordDefinitionPopover } from "@/components";
 
 interface WordTimestamp {
   word: string;
@@ -46,6 +46,8 @@ export const TextView: React.FC<TextViewProps> = ({
   parseMarkdownText,
 }) => {
   const [hasAudioLoaded, setHasAudioLoaded] = useState(false);
+  const [selectedWord, setSelectedWord] = useState<string | null>(null);
+  const [isPopoverOpen, setIsPopoverOpen] = useState(false);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -116,10 +118,70 @@ export const TextView: React.FC<TextViewProps> = ({
   // Create a function to parse text with word highlighting
   const parseTextWithHighlight = (text: string): ReactNode => {
     if (!wordTimestamps || wordTimestamps.length === 0) {
-      // If no timestamps, just use the markdown parser
-      return parseMarkdownText(text);
+      // Default mode: Parse markdown and make words clickable for definitions
+      const displayText = text.replace(/\*\*/g, "");
+      const words = displayText.split(/(\s+)/);
+      
+      // Build a map of which character ranges are bold (from markdown)
+      const boldRanges: Array<{ start: number; end: number }> = [];
+      const regex = /\*\*(.+?)\*\*/g;
+      let match;
+      while ((match = regex.exec(text)) !== null) {
+        const starsBeforeBold = (text.substring(0, match.index).match(/\*\*/g) || []).length * 2;
+        const displayStart = match.index - starsBeforeBold;
+        const innerLength = match[1].length;
+        boldRanges.push({
+          start: displayStart,
+          end: displayStart + innerLength,
+        });
+      }
+
+      const isBold = (start: number, end: number) => {
+        return boldRanges.some(
+          (range) => start < range.end && end > range.start
+        );
+      };
+
+      let displayCharPos = 0;
+
+      return (
+        <>
+          {words.map((part, idx) => {
+            const partStart = displayCharPos;
+            const partEnd = displayCharPos + part.length;
+            const shouldBold = isBold(partStart, partEnd);
+            displayCharPos = partEnd;
+
+            // If it's just whitespace, return as-is
+            if (/^\s+$/.test(part)) {
+              return <span key={idx}>{part}</span>;
+            }
+
+            const classes = [
+              shouldBold && "font-semibold",
+              "cursor-pointer hover:underline",
+            ]
+              .filter(Boolean)
+              .join(" ");
+
+            return (
+              <span
+                key={idx}
+                className={classes}
+                onClick={() => {
+                  setSelectedWord(part);
+                  setIsPopoverOpen(true);
+                }}
+              >
+                {part}
+              </span>
+            );
+          })}
+        </>
+      );
     }
 
+    // Listening mode: Parse with highlighting, no clickable definitions
     // Remove ** markers to get display text
     const displayText = text.replace(/\*\*/g, "");
 
@@ -196,8 +258,14 @@ export const TextView: React.FC<TextViewProps> = ({
   const showMediaPlayer = isLoadingAudio || isPlayingAudio || hasAudioLoaded;
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-white dark:bg-slate-950">
-      <Header onBackClick={onBackClick} />
+    <>
+      <WordDefinitionPopover
+        word={selectedWord || ""}
+        isOpen={isPopoverOpen}
+        onClose={() => setIsPopoverOpen(false)}
+      />
+      <div className="flex flex-col h-screen w-screen bg-white dark:bg-slate-950">
+        <Header onBackClick={onBackClick} />
 
       {/* Text Content */}
       <div className="flex-1 overflow-auto p-6 sm:p-8 lg:p-12 flex flex-col items-start justify-start">
@@ -270,6 +338,7 @@ export const TextView: React.FC<TextViewProps> = ({
         )}
       </div>
     </div>
+    </>
   );
 };
 
