@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Header } from "@/components";
+import { Header, GradientReader } from "@/components";
 
 export interface TextSettings {
   fontFamily: string;
@@ -279,18 +279,40 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
           {/* Preview */}
           <div className="mt-12 p-6 border-2 border-gray-300 dark:border-gray-600 rounded-lg">
-            <p
-              className="text-base leading-relaxed"
+            <label
+              className="block text-lg font-semibold mb-4"
+              style={{
+                fontFamily: settings.fontFamily,
+                color: getDisplayColor(),
+              }}
+            >
+              Preview
+            </label>
+            <div
               style={{
                 fontFamily: settings.fontFamily,
                 fontSize: `${settings.fontSize}px`,
-                color: getDisplayColor(),
                 lineHeight: settings.lineSpacing,
+                backgroundColor: settings.backgroundColor,
               }}
             >
-              This is a preview of your text settings. You can see how the font,
-              size, color, and line spacing look with your current selections.
-            </p>
+              {settings.fontColor === "gradient" ? (
+                <GradientReader
+                  text="This is a preview of your text settings. You can see how the font, size, and line spacing look with your current selections."
+                  onWordClick={() => {}}
+                />
+              ) : (
+                <p
+                  className="text-base leading-relaxed"
+                  style={{
+                    color: settings.fontColor,
+                  }}
+                >
+                  This is a preview of your text settings. You can see how the font,
+                  size, color, and line spacing look with your current selections.
+                </p>
+              )}
+            </div>
           </div>
         </div>
       </div>
