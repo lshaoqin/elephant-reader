@@ -11,7 +11,7 @@ interface WordWithColor {
   isWhitespace: boolean;
 }
 
-interface BionicReaderProps {
+interface GradientReaderProps {
   text: string;
   onWordClick: (word: string) => void;
 }
@@ -62,7 +62,7 @@ function interpolateColor(
   return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, "0")}`;
 }
 
-export const BionicReader: React.FC<BionicReaderProps> = ({
+export const GradientReader: React.FC<GradientReaderProps> = ({
   text,
   onWordClick,
 }) => {

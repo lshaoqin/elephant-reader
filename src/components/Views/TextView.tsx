@@ -8,9 +8,8 @@ import {
   Pencil2Icon,
   BookmarkIcon,
 } from "@radix-ui/react-icons";
-import { Button, Header, TextViewBox, LoadingSpinner, MediaPlayer, WordDefinitionPopover, BionicReader } from "@/components";
+import { Button, Header, TextViewBox, LoadingSpinner, MediaPlayer, WordDefinitionPopover, GradientReader } from "@/components";
 import type { TextSettings } from "./SettingsView";
-import { applyBionicReading } from "@/utils/bionicReading";
 
 interface WordTimestamp {
   word: string;
@@ -129,10 +128,10 @@ export const TextView: React.FC<TextViewProps> = ({
       // Default mode: Parse markdown and make words clickable for definitions
       const displayText = text.replace(/\*\*/g, "");
 
-      if (settings.enableBionicReading) {
-        // Apply bionic reading gradient based on visual lines
+      if (settings.fontColor === "gradient") {
+        // Apply gradient reading mode based on visual lines
         return (
-          <BionicReader
+          <GradientReader
             text={displayText}
             onWordClick={(word) => {
               setSelectedWord(word);
@@ -142,7 +141,7 @@ export const TextView: React.FC<TextViewProps> = ({
         );
       }
 
-      // Standard mode without bionic reading
+      // Standard mode without gradient reading
       const words = displayText.split(/(\s+)/);
       
       // Build a map of which character ranges are bold (from markdown)
@@ -308,7 +307,7 @@ export const TextView: React.FC<TextViewProps> = ({
             style={{
               fontFamily: settings.fontFamily,
               fontSize: `${settings.fontSize}px`,
-              color: settings.fontColor,
+              color: settings.fontColor === "gradient" ? "#1a1a1a" : settings.fontColor,
               lineHeight: settings.lineSpacing,
               backgroundColor: settings.backgroundColor,
             }}

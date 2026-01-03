@@ -80,7 +80,6 @@ export default function Page() {
     fontColor: "#000000",
     lineSpacing: 1.5,
     backgroundColor: "#fffbeb",
-    enableBionicReading: false,
   });
   const [previousViewMode, setPreviousViewMode] = useState<ViewMode>("upload");
   const audioRef = React.useRef<HTMLAudioElement>(null!);

@@ -9,7 +9,6 @@ export interface TextSettings {
   fontColor: string;
   lineSpacing: number;
   backgroundColor: string;
-  enableBionicReading: boolean;
 }
 
 interface SettingsViewProps {
@@ -48,6 +47,7 @@ const FONT_COLORS = [
   { name: "Dark Green", value: "#34d399" },
   { name: "Dark Red", value: "#ef4444" },
   { name: "Dark Purple", value: "#a78bfa" },
+  { name: "Gradient Reading", value: "gradient" },
 ];
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
@@ -55,6 +55,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onSettingsChange,
   onBackClick,
 }) => {
+  // Helper to get display color (gradient mode defaults to black for labels)
+  const getDisplayColor = () => settings.fontColor === "gradient" ? "#1a1a1a" : settings.fontColor;
+
   const handleFontChange = (fontFamily: string) => {
     onSettingsChange({ ...settings, fontFamily });
   };
@@ -75,10 +78,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     onSettingsChange({ ...settings, backgroundColor });
   };
 
-  const handleBionicReadingChange = (enableBionicReading: boolean) => {
-    onSettingsChange({ ...settings, enableBionicReading });
-  };
-
   const handleRestoreDefaults = () => {
     onSettingsChange({
       fontFamily: "Verdana, Arial, Helvetica, sans-serif",
@@ -86,7 +85,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       fontColor: "#000000",
       lineSpacing: 1.5,
       backgroundColor: "#fffbeb",
-      enableBionicReading: false,
     });
   };
 
@@ -103,7 +101,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             className="text-3xl font-bold mb-8"
             style={{
               fontFamily: settings.fontFamily,
-              color: settings.fontColor,
+              color: getDisplayColor(),
             }}
           >
             Text Settings
@@ -115,7 +113,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               className="block text-lg font-semibold mb-4"
               style={{
                 fontFamily: settings.fontFamily,
-                color: settings.fontColor,
+                color: getDisplayColor(),
               }}
             >
               Font Type
@@ -144,7 +142,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               className="block text-lg font-semibold mb-4"
               style={{
                 fontFamily: settings.fontFamily,
-                color: settings.fontColor,
+                color: getDisplayColor(),
               }}
             >
               Font Size: {settings.fontSize}px
@@ -166,7 +164,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               className="block text-lg font-semibold mb-4"
               style={{
                 fontFamily: settings.fontFamily,
-                color: settings.fontColor,
+                color: getDisplayColor(),
               }}
             >
               Font Color
@@ -184,7 +182,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 >
                   <div
                     className="w-6 h-6 rounded"
-                    style={{ backgroundColor: color.value }}
+                    style={{
+                      backgroundColor: color.value === "gradient" ? "#f0f0f0" : color.value,
+                      backgroundImage: color.value === "gradient" 
+                        ? "linear-gradient(90deg, #1a1a1a, #0066ff, #ff0033)" 
+                        : undefined,
+                    }}
                   />
                   <span style={{ fontFamily: settings.fontFamily }}>
                     {color.name}
@@ -200,7 +203,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               className="block text-lg font-semibold mb-4"
               style={{
                 fontFamily: settings.fontFamily,
-                color: settings.fontColor,
+                color: getDisplayColor(),
               }}
             >
               Line Spacing: {settings.lineSpacing}x
@@ -217,7 +220,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   }`}
                   style={{
                     fontFamily: settings.fontFamily,
-                    color: settings.fontColor,
+                    color: getDisplayColor(),
                   }}
                 >
                   {spacing}x
@@ -232,7 +235,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               className="block text-lg font-semibold mb-4"
               style={{
                 fontFamily: settings.fontFamily,
-                color: settings.fontColor,
+                color: getDisplayColor(),
               }}
             >
               Background Color
@@ -253,50 +256,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     className="text-sm font-medium"
                     style={{
                       fontFamily: settings.fontFamily,
-                      color: settings.fontColor,
+                      color: getDisplayColor(),
                     }}
                   >
                     {color.name}
                   </span>
                 </button>
               ))}
-            </div>
-          </div>
-
-          {/* Bionic Reading Toggle */}
-          <div className="mb-8">
-            <label
-              className="block text-lg font-semibold mb-4"
-              style={{
-                fontFamily: settings.fontFamily,
-                color: settings.fontColor,
-              }}
-            >
-              Bionic Reading Mode
-            </label>
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => handleBionicReadingChange(true)}
-                className={`px-6 py-3 rounded-lg font-semibold transition-colors ${
-                  settings.enableBionicReading
-                    ? "bg-blue-600 text-white"
-                    : "bg-gray-200 dark:bg-gray-700 hover:bg-gray-300"
-                }`}
-                style={{ fontFamily: settings.fontFamily }}
-              >
-                On
-              </button>
-              <button
-                onClick={() => handleBionicReadingChange(false)}
-                className={`px-6 py-3 rounded-lg font-semibold transition-colors ${
-                  !settings.enableBionicReading
-                    ? "bg-blue-600 text-white"
-                    : "bg-gray-200 dark:bg-gray-700 hover:bg-gray-300"
-                }`}
-                style={{ fontFamily: settings.fontFamily }}
-              >
-                Off
-              </button>
             </div>
           </div>
 
@@ -318,7 +284,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               style={{
                 fontFamily: settings.fontFamily,
                 fontSize: `${settings.fontSize}px`,
-                color: settings.fontColor,
+                color: getDisplayColor(),
                 lineHeight: settings.lineSpacing,
               }}
             >
