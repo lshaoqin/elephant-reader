@@ -80,9 +80,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
   const handleRestoreDefaults = () => {
     onSettingsChange({
-      fontFamily: "Verdana, Arial, Helvetica, sans-serif",
+      fontFamily: "Verdana, sans-serif",
       fontSize: 20,
-      fontColor: "#000000",
+      fontColor: "#1a1a1a",
       lineSpacing: 1.5,
       backgroundColor: "#fffef5",
     });
