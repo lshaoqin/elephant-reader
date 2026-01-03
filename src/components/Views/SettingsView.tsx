@@ -84,7 +84,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       fontSize: 20,
       fontColor: "#000000",
       lineSpacing: 1.5,
-      backgroundColor: "#fffbeb",
+      backgroundColor: "#fffef5",
     });
   };
 
