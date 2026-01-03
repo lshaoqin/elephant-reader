@@ -9,6 +9,7 @@ export interface TextSettings {
   fontColor: string;
   lineSpacing: number;
   backgroundColor: string;
+  enableBionicReading: boolean;
 }
 
 interface SettingsViewProps {
@@ -74,6 +75,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     onSettingsChange({ ...settings, backgroundColor });
   };
 
+  const handleBionicReadingChange = (enableBionicReading: boolean) => {
+    onSettingsChange({ ...settings, enableBionicReading });
+  };
+
   const handleRestoreDefaults = () => {
     onSettingsChange({
       fontFamily: "Verdana, Arial, Helvetica, sans-serif",
@@ -81,6 +86,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       fontColor: "#000000",
       lineSpacing: 1.5,
       backgroundColor: "#fffbeb",
+      enableBionicReading: false,
     });
   };
 
@@ -254,6 +260,43 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   </span>
                 </button>
               ))}
+            </div>
+          </div>
+
+          {/* Bionic Reading Toggle */}
+          <div className="mb-8">
+            <label
+              className="block text-lg font-semibold mb-4"
+              style={{
+                fontFamily: settings.fontFamily,
+                color: settings.fontColor,
+              }}
+            >
+              Bionic Reading Mode
+            </label>
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => handleBionicReadingChange(true)}
+                className={`px-6 py-3 rounded-lg font-semibold transition-colors ${
+                  settings.enableBionicReading
+                    ? "bg-blue-600 text-white"
+                    : "bg-gray-200 dark:bg-gray-700 hover:bg-gray-300"
+                }`}
+                style={{ fontFamily: settings.fontFamily }}
+              >
+                On
+              </button>
+              <button
+                onClick={() => handleBionicReadingChange(false)}
+                className={`px-6 py-3 rounded-lg font-semibold transition-colors ${
+                  !settings.enableBionicReading
+                    ? "bg-blue-600 text-white"
+                    : "bg-gray-200 dark:bg-gray-700 hover:bg-gray-300"
+                }`}
+                style={{ fontFamily: settings.fontFamily }}
+              >
+                Off
+              </button>
             </div>
           </div>
 

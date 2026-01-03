@@ -8,8 +8,9 @@ import {
   Pencil2Icon,
   BookmarkIcon,
 } from "@radix-ui/react-icons";
-import { Button, Header, TextViewBox, LoadingSpinner, MediaPlayer, WordDefinitionPopover } from "@/components";
+import { Button, Header, TextViewBox, LoadingSpinner, MediaPlayer, WordDefinitionPopover, BionicReader } from "@/components";
 import type { TextSettings } from "./SettingsView";
+import { applyBionicReading } from "@/utils/bionicReading";
 
 interface WordTimestamp {
   word: string;
@@ -120,11 +121,28 @@ export const TextView: React.FC<TextViewProps> = ({
     return map;
   };
 
+  const textContainerRef = React.useRef<HTMLDivElement>(null);
+
   // Create a function to parse text with word highlighting
   const parseTextWithHighlight = (text: string): ReactNode => {
     if (!wordTimestamps || wordTimestamps.length === 0) {
       // Default mode: Parse markdown and make words clickable for definitions
       const displayText = text.replace(/\*\*/g, "");
+
+      if (settings.enableBionicReading) {
+        // Apply bionic reading gradient based on visual lines
+        return (
+          <BionicReader
+            text={displayText}
+            onWordClick={(word) => {
+              setSelectedWord(word);
+              setIsPopoverOpen(true);
+            }}
+          />
+        );
+      }
+
+      // Standard mode without bionic reading
       const words = displayText.split(/(\s+)/);
       
       // Build a map of which character ranges are bold (from markdown)
