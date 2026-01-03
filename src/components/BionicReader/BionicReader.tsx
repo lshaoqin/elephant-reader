@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useLayoutEffect, useMemo, useRef, useState } from "react";
 
 interface Word {
   text: string;
@@ -71,12 +71,16 @@ export const BionicReader: React.FC<BionicReaderProps> = ({
   const [coloredWords, setColoredWords] = useState<WordWithColor[]>([]);
 
   // Parse text into words
-  const words: Word[] = text.split(/(\s+)/).map((token) => ({
-    text: token,
-    isWhitespace: /^\s+$/.test(token),
-  }));
+  const words: Word[] = useMemo(
+    () =>
+      text.split(/(\s+)/).map((token) => ({
+        text: token,
+        isWhitespace: /^\s+$/.test(token),
+      })),
+    [text]
+  );
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!containerRef.current) return;
 
     // Get the positions of all words to determine visual lines
@@ -143,12 +147,13 @@ export const BionicReader: React.FC<BionicReaderProps> = ({
       };
     });
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setColoredWords(newColoredWords);
   }, [text, words]);
 
   return (
     <div ref={containerRef}>
-      {coloredWords.map((word, idx) => (
+      {(coloredWords.length > 0 ? coloredWords : words.map(w => ({ ...w, color: BLACK }))).map((word, idx) => (
         <span
           key={idx}
           ref={(el) => {
