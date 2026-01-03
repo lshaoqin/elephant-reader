@@ -348,6 +348,7 @@ export default function Page() {
         imageScale={imageScale}
         selectedBlockIndex={selectedBlockIndex}
         formattingBlockIndex={formattingBlockIndex}
+        settings={settings}
         onBackClick={() => {
           // Abort any ongoing TTS request
           if (ttsAbortControllerRef.current) {
@@ -358,6 +359,10 @@ export default function Page() {
           // Clear audio cache when going back to upload
           setCachedAudioUrl(null);
           setCachedAudioKey(null);
+        }}
+        onSettingsClick={() => {
+          setPreviousViewMode("image");
+          setViewMode("settings");
         }}
         onImageLoad={handleImageLoad}
         onBlockClick={formatBlockText}

@@ -2,6 +2,7 @@
 
 import React from "react";
 import { Header, LoadingSpinner } from "@/components";
+import type { TextSettings } from "./SettingsView";
 
 interface TextBlock {
   text: string;
@@ -27,8 +28,10 @@ interface ImageViewProps {
   selectedBlockIndex: number | null;
   formattingBlockIndex: number | null;
   onBackClick: () => void;
+  onSettingsClick: () => void;
   onImageLoad: (e: React.SyntheticEvent<HTMLImageElement>) => void;
   onBlockClick: (blockIndex: number) => void;
+  settings: TextSettings;
 }
 
 export const ImageView: React.FC<ImageViewProps> = ({
@@ -37,8 +40,10 @@ export const ImageView: React.FC<ImageViewProps> = ({
   selectedBlockIndex,
   formattingBlockIndex,
   onBackClick,
+  onSettingsClick,
   onImageLoad,
   onBlockClick,
+  settings,
 }) => {
   const renderBoundingBoxes = () => {
     if (!result || !imageScale.width || !imageScale.naturalWidth) return null;
@@ -92,7 +97,7 @@ export const ImageView: React.FC<ImageViewProps> = ({
 
   return (
     <div className="flex flex-col h-screen w-screen bg-black">
-      <Header onBackClick={onBackClick} />
+      <Header onBackClick={onBackClick} onSettingsClick={onSettingsClick} />
 
       {/* Image Container */}
       <div className="flex-1 flex items-center justify-center relative bg-black overflow-hidden">
