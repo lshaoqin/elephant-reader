@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, ReactNode } from "react";
+import React, { useState, ReactNode, useEffect } from "react";
 import { UploadView, ImageView, TextView, SettingsView } from "@/components/Views";
 import type { TextSettings } from "@/components/Views/SettingsView";
 
@@ -57,6 +57,38 @@ function parseMarkdownText(text: string): ReactNode {
   return parts.length > 0 ? parts : text;
 }
 
+const DEFAULT_SETTINGS: TextSettings = {
+  fontFamily: "Verdana, Arial, Helvetica, sans-serif",
+  fontSize: 20,
+  fontColor: "#000000",
+  lineSpacing: 1.5,
+  backgroundColor: "#fffef5",
+};
+
+function loadSettingsFromCookie(): TextSettings {
+  if (typeof document === "undefined") return DEFAULT_SETTINGS;
+  
+  const cookie = document.cookie
+    .split("; ")
+    .find((row) => row.startsWith("textSettings="));
+  
+  if (!cookie) return DEFAULT_SETTINGS;
+  
+  try {
+    const decoded = decodeURIComponent(cookie.substring("textSettings=".length));
+    return JSON.parse(decoded);
+  } catch {
+    return DEFAULT_SETTINGS;
+  }
+}
+
+function saveSettingsToCookie(settings: TextSettings) {
+  if (typeof document === "undefined") return;
+  
+  const encoded = encodeURIComponent(JSON.stringify(settings));
+  document.cookie = `textSettings=${encoded}; max-age=${60 * 60 * 24 * 365}; path=/`;
+}
+
 export default function Page() {
   const [result, setResult] = useState<ExtractionResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -74,16 +106,21 @@ export default function Page() {
   const [cachedAudioKey, setCachedAudioKey] = useState<string | null>(null);
   const [wordTimestamps, setWordTimestamps] = useState<WordTimestamp[]>([]);
   const [currentPlaybackTime, setCurrentPlaybackTime] = useState(0);
-  const [settings, setSettings] = useState<TextSettings>({
-    fontFamily: "Verdana, Arial, Helvetica, sans-serif",
-    fontSize: 20,
-    fontColor: "#000000",
-    lineSpacing: 1.5,
-    backgroundColor: "#fffef5",
-  });
+  const [settings, setSettings] = useState<TextSettings>(DEFAULT_SETTINGS);
   const [previousViewMode, setPreviousViewMode] = useState<ViewMode>("upload");
   const audioRef = React.useRef<HTMLAudioElement>(null!);
   const ttsAbortControllerRef = React.useRef<AbortController | null>(null);
+
+  // Load settings from cookie on mount
+  useEffect(() => {
+    const savedSettings = loadSettingsFromCookie();
+    setSettings(savedSettings);
+  }, []);
+
+  // Save settings to cookie whenever they change
+  useEffect(() => {
+    saveSettingsToCookie(settings);
+  }, [settings]);
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
