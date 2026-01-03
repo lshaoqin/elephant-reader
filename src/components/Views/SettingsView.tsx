@@ -167,7 +167,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 color: getDisplayColor(),
               }}
             >
-              Font Color
+              Font Colour
             </label>
             <div className="grid grid-cols-3 gap-3">
               {FONT_COLORS.map((color) => (
@@ -238,7 +238,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 color: getDisplayColor(),
               }}
             >
-              Background Color
+              Background Colour
             </label>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
               {BACKGROUND_COLORS.map((color) => (
