@@ -3,7 +3,6 @@
 import React, { ReactNode, useState, useEffect } from "react";
 import {
   FileTextIcon,
-  Share1Icon,
   SpeakerLoudIcon,
   Pencil2Icon,
   BookmarkIcon,
@@ -429,9 +428,6 @@ export const TextView: React.FC<TextViewProps> = ({
               icon={<FileTextIcon className="w-6 h-6" />}
             >
               Paragraph mode
-            </Button>
-            <Button icon={<Share1Icon className="w-6 h-6" />}>
-              Share with others
             </Button>
             <Button
               onClick={onListen}
