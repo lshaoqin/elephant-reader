@@ -358,28 +358,8 @@ export const TextView: React.FC<TextViewProps> = ({
             >
               {parseTextWithHighlight(currentParagraph)}
             </TextViewBox>
-            {/* Paragraph Navigation */}
-            <div className="flex items-center justify-between gap-4 mt-6">
-              <button
-                onClick={handlePreviousParagraph}
-                disabled={currentParagraphIndex === 0}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold rounded-lg transition-colors"
-              >
-                ← Previous
-              </button>
-              <span
-                className="text-sm font-medium"
-                style={{ color: settings.fontColor === "gradient" ? "#1a1a1a" : settings.fontColor }}
-              >
-                Paragraph {currentParagraphIndex + 1} of {paragraphs.length}
-              </span>
-              <button
-                onClick={handleNextParagraph}
-                disabled={currentParagraphIndex === paragraphs.length - 1}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold rounded-lg transition-colors"
-              >
-                Next →
-              </button>
+            <div className="mt-6 text-sm font-medium" style={{ color: settings.fontColor === "gradient" ? "#1a1a1a" : settings.fontColor }}>
+              Paragraph {currentParagraphIndex + 1} of {paragraphs.length}
             </div>
           </div>
         ) : (
@@ -415,16 +395,40 @@ export const TextView: React.FC<TextViewProps> = ({
               />
             )}
           </>
-        ) : (
+        ) : isParagraphMode ? (
           <>
             <Button 
               onClick={() => {
-                setIsParagraphMode(!isParagraphMode);
+                setIsParagraphMode(false);
                 setCurrentParagraphIndex(0);
               }}
               icon={<FileTextIcon className="w-6 h-6" />}
             >
-              {isParagraphMode ? "Full text mode" : "Paragraph mode"}
+              Full text mode
+            </Button>
+            <Button
+              onClick={handlePreviousParagraph}
+              disabled={currentParagraphIndex === 0}
+            >
+              ← Previous
+            </Button>
+            <Button
+              onClick={handleNextParagraph}
+              disabled={currentParagraphIndex === paragraphs.length - 1}
+            >
+              Next →
+            </Button>
+          </>
+        ) : (
+          <>
+            <Button 
+              onClick={() => {
+                setIsParagraphMode(true);
+                setCurrentParagraphIndex(0);
+              }}
+              icon={<FileTextIcon className="w-6 h-6" />}
+            >
+              Paragraph mode
             </Button>
             <Button icon={<Share1Icon className="w-6 h-6" />}>
               Share with others
