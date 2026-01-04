@@ -54,6 +54,7 @@ export const TextView: React.FC<TextViewProps> = ({
   const [isPopoverOpen, setIsPopoverOpen] = useState(false);
   const [isParagraphMode, setIsParagraphMode] = useState(false);
   const [currentParagraphIndex, setCurrentParagraphIndex] = useState(0);
+  const [playbackSpeed, setPlaybackSpeed] = useState(1);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -69,6 +70,22 @@ export const TextView: React.FC<TextViewProps> = ({
       audio.removeEventListener("loadstart", handleLoadStart);
     };
   }, [audioRef]);
+
+  const handleSpeedUp = () => {
+    const newSpeed = Math.min(playbackSpeed + 0.25, 2);
+    setPlaybackSpeed(newSpeed);
+    if (audioRef.current) {
+      audioRef.current.playbackRate = newSpeed;
+    }
+  };
+
+  const handleSlowDown = () => {
+    const newSpeed = Math.max(playbackSpeed - 0.25, 0.5);
+    setPlaybackSpeed(newSpeed);
+    if (audioRef.current) {
+      audioRef.current.playbackRate = newSpeed;
+    }
+  };
 
   // Build a mapping of timestamp index to word index at the start
   const buildTimestampWordMap = (text: string): Map<number, number> => {
@@ -380,20 +397,41 @@ export const TextView: React.FC<TextViewProps> = ({
       {/* Footer Actions */}
       <div className="flex gap-4 p-6 bg-white dark:bg-slate-900 border-t-4 border-yellow-500 flex-wrap justify-center">
         {showMediaPlayer && !isFormatting ? (
-          <>
+          <div className="flex gap-4 items-center flex-wrap justify-center">
             {isLoadingAudio ? (
               <div className="flex items-center gap-2">
                 <LoadingSpinner size="sm" color="blue" />
               </div>
             ) : (
-              <MediaPlayer
-                audioRef={audioRef}
-                isPlaying={isPlayingAudio}
-                onPlayPause={onPlayPauseAudio}
-                onStop={onStopAudio}
-              />
+              <>
+                <MediaPlayer
+                  audioRef={audioRef}
+                  isPlaying={isPlayingAudio}
+                  onPlayPause={onPlayPauseAudio}
+                  onStop={onStopAudio}
+                />
+                <div className="flex gap-2 items-center">
+                  <button
+                    onClick={handleSlowDown}
+                    disabled={playbackSpeed <= 0.5}
+                    className="px-2 py-1 text-sm bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold rounded transition-colors"
+                  >
+                    −
+                  </button>
+                  <div className="text-xs font-medium text-slate-600 dark:text-slate-400 whitespace-nowrap">
+                    {playbackSpeed.toFixed(2)}x speed
+                  </div>
+                  <button
+                    onClick={handleSpeedUp}
+                    disabled={playbackSpeed >= 2}
+                    className="px-2 py-1 text-sm bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold rounded transition-colors"
+                  >
+                    +
+                  </button>
+                </div>
+              </>
             )}
-          </>
+          </div>
         ) : isParagraphMode ? (
           <>
             <Button 

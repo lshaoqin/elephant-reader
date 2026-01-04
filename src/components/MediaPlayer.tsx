@@ -69,7 +69,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
       </div>
 
       {/* Controls */}
-      <div className="flex gap-3 justify-center">
+      <div className="flex gap-2 justify-center items-center">
         <Button
           onClick={onPlayPause}
           icon={isPlaying ? <PauseIcon className="w-6 h-6" /> : <PlayIcon className="w-6 h-6" />}
