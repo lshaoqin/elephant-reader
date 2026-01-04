@@ -351,7 +351,7 @@ export const TextView: React.FC<TextViewProps> = ({
         <Header onBackClick={onBackClick} onSettingsClick={onSettingsClick} />
 
       {/* Text Content */}
-      <div className="flex-1 overflow-hidden p-6 sm:p-8 lg:p-12 flex flex-col items-start justify-start">
+      <div className="flex-1 overflow-auto p-6 sm:p-8 lg:p-12 flex flex-col items-start justify-start">
         {isFormatting ? (
           <div className="flex items-center justify-center w-full h-full">
             <LoadingSpinner
@@ -370,7 +370,7 @@ export const TextView: React.FC<TextViewProps> = ({
                 lineHeight: settings.lineSpacing,
                 backgroundColor: settings.backgroundColor,
               }}
-              className="text-base sm:text-lg lg:text-xl leading-relaxed flex-1 overflow-hidden"
+              className="text-base sm:text-lg lg:text-xl leading-relaxed flex-1 overflow-auto"
             >
               {parseTextWithHighlight(currentParagraph)}
             </TextViewBox>
@@ -387,7 +387,7 @@ export const TextView: React.FC<TextViewProps> = ({
               lineHeight: settings.lineSpacing,
               backgroundColor: settings.backgroundColor,
             }}
-            className="text-base sm:text-lg lg:text-xl leading-relaxed"
+            className="text-base sm:text-lg lg:text-xl leading-relaxed overflow-auto"
           >
             {parseTextWithHighlight(displayText)}
           </TextViewBox>
