@@ -53,6 +53,8 @@ export const TextView: React.FC<TextViewProps> = ({
   const [hasAudioLoaded, setHasAudioLoaded] = useState(false);
   const [selectedWord, setSelectedWord] = useState<string | null>(null);
   const [isPopoverOpen, setIsPopoverOpen] = useState(false);
+  const [isParagraphMode, setIsParagraphMode] = useState(false);
+  const [currentParagraphIndex, setCurrentParagraphIndex] = useState(0);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -277,6 +279,46 @@ export const TextView: React.FC<TextViewProps> = ({
     );
   };
 
+  // Split text into paragraphs, breaking long ones if needed
+  const splitIntoParagraphs = (text: string): string[] => {
+    const MAX_CHARS_PER_PARAGRAPH = 1500;
+    const paragraphs = text.split(/\n\n+/);
+    const result: string[] = [];
+
+    for (const para of paragraphs) {
+      if (para.length <= MAX_CHARS_PER_PARAGRAPH) {
+        result.push(para);
+      } else {
+        // Split long paragraphs by sentences
+        const sentences = para.match(/[^.!?]+[.!?]+/g) || [para];
+        let currentChunk = "";
+
+        for (const sentence of sentences) {
+          if ((currentChunk + sentence).length <= MAX_CHARS_PER_PARAGRAPH) {
+            currentChunk += sentence;
+          } else {
+            if (currentChunk) result.push(currentChunk);
+            currentChunk = sentence;
+          }
+        }
+        if (currentChunk) result.push(currentChunk);
+      }
+    }
+
+    return result.filter((p) => p.trim().length > 0);
+  };
+
+  const paragraphs = splitIntoParagraphs(displayText);
+  const currentParagraph = paragraphs[currentParagraphIndex] || displayText;
+
+  const handlePreviousParagraph = () => {
+    setCurrentParagraphIndex((prev) => Math.max(0, prev - 1));
+  };
+
+  const handleNextParagraph = () => {
+    setCurrentParagraphIndex((prev) => Math.min(paragraphs.length - 1, prev + 1));
+  };
+
   const showMediaPlayer = isLoadingAudio || isPlayingAudio || hasAudioLoaded;
 
   return (
@@ -293,7 +335,7 @@ export const TextView: React.FC<TextViewProps> = ({
         <Header onBackClick={onBackClick} onSettingsClick={onSettingsClick} />
 
       {/* Text Content */}
-      <div className="flex-1 overflow-auto p-6 sm:p-8 lg:p-12 flex flex-col items-start justify-start">
+      <div className="flex-1 overflow-hidden p-6 sm:p-8 lg:p-12 flex flex-col items-start justify-start">
         {isFormatting ? (
           <div className="flex items-center justify-center w-full h-full">
             <LoadingSpinner
@@ -301,6 +343,44 @@ export const TextView: React.FC<TextViewProps> = ({
               size="md"
               color="blue"
             />
+          </div>
+        ) : isParagraphMode ? (
+          <div className="w-full h-full flex flex-col">
+            <TextViewBox
+              style={{
+                fontFamily: settings.fontFamily,
+                fontSize: `${settings.fontSize}px`,
+                color: settings.fontColor === "gradient" ? "#1a1a1a" : settings.fontColor,
+                lineHeight: settings.lineSpacing,
+                backgroundColor: settings.backgroundColor,
+              }}
+              className="text-base sm:text-lg lg:text-xl leading-relaxed flex-1 overflow-hidden"
+            >
+              {parseTextWithHighlight(currentParagraph)}
+            </TextViewBox>
+            {/* Paragraph Navigation */}
+            <div className="flex items-center justify-between gap-4 mt-6">
+              <button
+                onClick={handlePreviousParagraph}
+                disabled={currentParagraphIndex === 0}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold rounded-lg transition-colors"
+              >
+                ← Previous
+              </button>
+              <span
+                className="text-sm font-medium"
+                style={{ color: settings.fontColor === "gradient" ? "#1a1a1a" : settings.fontColor }}
+              >
+                Paragraph {currentParagraphIndex + 1} of {paragraphs.length}
+              </span>
+              <button
+                onClick={handleNextParagraph}
+                disabled={currentParagraphIndex === paragraphs.length - 1}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold rounded-lg transition-colors"
+              >
+                Next →
+              </button>
+            </div>
           </div>
         ) : (
           <TextViewBox
@@ -337,8 +417,14 @@ export const TextView: React.FC<TextViewProps> = ({
           </>
         ) : (
           <>
-            <Button icon={<FileTextIcon className="w-6 h-6" />}>
-              Text-only mode
+            <Button 
+              onClick={() => {
+                setIsParagraphMode(!isParagraphMode);
+                setCurrentParagraphIndex(0);
+              }}
+              icon={<FileTextIcon className="w-6 h-6" />}
+            >
+              {isParagraphMode ? "Full text mode" : "Paragraph mode"}
             </Button>
             <Button icon={<Share1Icon className="w-6 h-6" />}>
               Share with others
