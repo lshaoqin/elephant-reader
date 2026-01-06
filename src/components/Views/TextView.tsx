@@ -31,6 +31,7 @@ interface TextViewProps {
   onStopAudio: () => void;
   parseMarkdownText: (text: string) => ReactNode;
   settings: TextSettings;
+  onEditClick: () => void;
 }
 
 export const TextView: React.FC<TextViewProps> = ({
@@ -48,6 +49,7 @@ export const TextView: React.FC<TextViewProps> = ({
   onStopAudio,
   parseMarkdownText,
   settings,
+  onEditClick,
 }) => {
   const [hasAudioLoaded, setHasAudioLoaded] = useState(false);
   const [selectedWord, setSelectedWord] = useState<string | null>(null);
@@ -486,7 +488,10 @@ export const TextView: React.FC<TextViewProps> = ({
             >
               Read
             </Button>
-            <Button icon={<Pencil2Icon className="w-6 h-6" />}>
+            <Button 
+              onClick={onEditClick}
+              icon={<Pencil2Icon className="w-6 h-6" />}
+            >
               Edit
             </Button>
             <Button icon={<BookmarkIcon className="w-6 h-6" />}>

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, ReactNode, useEffect } from "react";
-import { UploadView, ImageView, TextView, SettingsView } from "@/components/Views";
+import { UploadView, ImageView, TextView, SettingsView, EditView } from "@/components/Views";
 import type { TextSettings } from "@/components/Views/SettingsView";
 
 interface TextBlock {
@@ -28,7 +28,7 @@ interface WordTimestamp {
   end: number;
 }
 
-type ViewMode = "upload" | "image" | "text" | "settings";
+type ViewMode = "upload" | "image" | "text" | "settings" | "edit";
 
 // Function to parse markdown formatting (**text** -> bold)
 function parseMarkdownText(text: string): ReactNode {
@@ -453,6 +453,10 @@ export default function Page() {
           onPlayPauseAudio={handlePlayPauseAudio}
           onStopAudio={handleStopAudio}
           parseMarkdownText={parseMarkdownText}
+          onEditClick={() => {
+            setPreviousViewMode("text");
+            setViewMode("edit");
+          }}
         />
         <audio 
           ref={audioRef} 
@@ -474,5 +478,46 @@ export default function Page() {
     );
   }
 
-  return null;
+  // Edit View
+  if (viewMode === "edit" && result) {
+    const cacheKey = selectedBlockIndex !== null ? `block-${selectedBlockIndex}` : null;
+    const displayText = selectedBlockIndex !== null 
+      ? formattedCache[cacheKey!] || result.blocks[selectedBlockIndex]?.text 
+      : result.full_text;
+
+    const handleEditSave = (editedText: string) => {
+      // Update the formatted cache with the edited text
+      if (selectedBlockIndex !== null) {
+        setFormattedCache((prev) => ({
+          ...prev,
+          [`block-${selectedBlockIndex}`]: editedText,
+        }));
+      } else {
+        // For full text, we need to update the result's full_text
+        setResult((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            full_text: editedText,
+          };
+        });
+      }
+      // Go back to text view
+      setViewMode("text");
+    };
+
+    return (
+      <EditView
+        initialText={displayText}
+        onBackClick={() => setViewMode("text")}
+        onSave={handleEditSave}
+        onSettingsClick={() => {
+          setPreviousViewMode("edit");
+          setViewMode("settings");
+        }}
+        settings={settings}
+        parseMarkdownText={parseMarkdownText}
+      />
+    );
+  }
 }
