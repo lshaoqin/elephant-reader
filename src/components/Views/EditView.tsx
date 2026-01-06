@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useState, ReactNode } from "react";
-import { ArrowLeftIcon, CheckIcon } from "@radix-ui/react-icons";
-import { Header } from "@/components";
+import { CheckIcon } from "@radix-ui/react-icons";
+import { Header, Button } from "@/components";
 import type { TextSettings } from "./SettingsView";
 
 interface EditViewProps {
@@ -103,22 +103,22 @@ export const EditView: React.FC<EditViewProps> = ({
       </div>
 
       {/* Tablet-optimized footer with formatting buttons */}
-      <div className="flex gap-3 p-4 sm:p-6 bg-white dark:bg-slate-900 border-t-4 border-yellow-500 flex-wrap justify-center md:flex-nowrap md:justify-end">
-        <button
+      <div className="flex gap-4 p-6 bg-white dark:bg-slate-900 border-t-4 border-yellow-500 flex-wrap justify-center">
+        <Button
           onClick={handleBold}
           disabled={!selectedRange}
-          className="px-6 py-3 sm:px-8 sm:py-4 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold rounded transition-colors text-sm sm:text-base"
-          title="Bold selected text"
+          icon={
+            <span style={{ fontSize: "16px", fontWeight: "bold" }}>B</span>
+          }
         >
-          <strong>B</strong>old
-        </button>
-        <button
+          Bold
+        </Button>
+        <Button
           onClick={handleSave}
-          className="px-6 py-3 sm:px-8 sm:py-4 bg-green-600 hover:bg-green-700 text-white font-semibold rounded transition-colors flex items-center gap-2 text-sm sm:text-base"
+          icon={<CheckIcon className="w-6 h-6" />}
         >
-          <CheckIcon className="w-5 h-5" />
           Save
-        </button>
+        </Button>
       </div>
     </div>
   );
