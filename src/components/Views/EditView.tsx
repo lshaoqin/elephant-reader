@@ -72,10 +72,6 @@ export const EditView: React.FC<EditViewProps> = ({
     applyFormatting("**", "**");
   };
 
-  const handleUnderline = () => {
-    applyFormatting("<u>", "</u>");
-  };
-
   const handleSave = () => {
     onSave(text);
   };
@@ -115,14 +111,6 @@ export const EditView: React.FC<EditViewProps> = ({
           title="Bold selected text"
         >
           <strong>B</strong>old
-        </button>
-        <button
-          onClick={handleUnderline}
-          disabled={!selectedRange}
-          className="px-6 py-3 sm:px-8 sm:py-4 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold rounded transition-colors text-sm sm:text-base"
-          title="Underline selected text"
-        >
-          <u>U</u>nderline
         </button>
         <button
           onClick={handleSave}
