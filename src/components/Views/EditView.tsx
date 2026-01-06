@@ -91,7 +91,7 @@ export const EditView: React.FC<EditViewProps> = ({
           onChange={handleTextChange}
           onMouseUp={handleMouseUp}
           onKeyUp={handleKeyUp}
-          className="w-full h-full p-0 bg-transparent border-none focus:outline-none resize-none text-base sm:text-lg leading-relaxed"
+          className="w-full h-full px-6 sm:px-8 lg:px-12 pt-6 sm:pt-8 lg:pt-12 pb-0 bg-transparent border-none focus:outline-none resize-none text-base sm:text-lg leading-relaxed"
           style={{
             fontFamily: settings.fontFamily,
             fontSize: `${settings.fontSize}px`,
