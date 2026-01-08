@@ -1,7 +1,6 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import React, { useState, useRef, ReactNode } from "react";
+import React, { useState, useRef, ReactNode, useMemo, useCallback } from "react";
 import { StopIcon } from "@radix-ui/react-icons";
 import { Header, Button, TextViewBox } from "@/components";
 import type { TextSettings } from "./SettingsView";
@@ -14,8 +13,8 @@ interface ReadingViewProps {
 }
 
 interface SpeechRecognitionEvent extends Event {
-  results: any;
-  isFinal?: boolean;
+  results: SpeechRecognitionResultList;
+  resultIndex: number;
 }
 
 interface SpeechRecognitionErrorEvent extends Event {
@@ -41,6 +40,11 @@ declare global {
   }
 }
 
+// Helper function to normalize a word for comparison (remove punctuation, lowercase)
+const normalizeWord = (word: string): string => {
+  return word.toLowerCase().replace(/[^\w']/g, "");
+};
+
 export const ReadingView: React.FC<ReadingViewProps> = ({
   displayText,
   onBackClick,
@@ -52,6 +56,20 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
   const [recognizedText, setRecognizedText] = useState("");
   const [status, setStatus] = useState("Ready to read");
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const processedResultsRef = useRef<number>(0); // Track which results we've already processed
+  const currentWordIndexRef = useRef<number>(0); // Ref to track current word index in callbacks
+
+  // Keep the ref in sync with state
+  React.useEffect(() => {
+    currentWordIndexRef.current = currentWordIndex;
+  }, [currentWordIndex]);
+
+  // Extract plain text and word list (memoized for consistency)
+  const { plainText, words } = useMemo(() => {
+    const text = displayText.replace(/<[^>]*>/g, "");
+    const wordList = text.split(/\s+/).filter((word) => word.length > 0);
+    return { plainText: text, words: wordList };
+  }, [displayText]);
 
   // Initialize Web Speech API
   React.useEffect(() => {
@@ -76,115 +94,164 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
     }
   }, []);
 
-  // Extract words from HTML text
-  const getWords = (): string[] => {
-    // Remove HTML tags
-    const plainText = displayText.replace(/<[^>]*>/g, "");
-    // Split into words, keeping track of whitespace
-    return plainText.split(/\s+/).filter((word) => word.length > 0);
-  };
-
-  const words = getWords();
-
-  const handleRecognizedText = (text: string) => {
-    const lowerText = text.toLowerCase();
-    const currentWord = words[currentWordIndex]?.toLowerCase();
-
-    setRecognizedText(text);
-
-    if (currentWord && lowerText.includes(currentWord)) {
-      // Word recognized, move to next
-      setCurrentWordIndex((prev) => Math.min(prev + 1, words.length - 1));
-      setStatus(`Recognized: "${currentWord}". Next word...`);
+  // Find matching words from speech in the text, starting from current position
+  const findMatchingWords = useCallback((spokenWords: string[], startIndex: number): number => {
+    let matchedCount = 0;
+    
+    for (const spokenWord of spokenWords) {
+      const normalizedSpoken = normalizeWord(spokenWord);
+      if (!normalizedSpoken) continue;
+      
+      const targetIndex = startIndex + matchedCount;
+      if (targetIndex >= words.length) break;
+      
+      const normalizedTarget = normalizeWord(words[targetIndex]);
+      
+      // Check if the spoken word matches the expected word
+      if (normalizedSpoken === normalizedTarget) {
+        matchedCount++;
+      } else {
+        // Also check if it's a close match (for speech recognition errors)
+        // Allow matching if the spoken word is very similar
+        const isSimilar = 
+          normalizedTarget.startsWith(normalizedSpoken) ||
+          normalizedSpoken.startsWith(normalizedTarget) ||
+          (normalizedSpoken.length > 2 && normalizedTarget.includes(normalizedSpoken));
+        
+        if (isSimilar) {
+          matchedCount++;
+        }
+      }
     }
-  };
+    
+    return matchedCount;
+  }, [words]);
 
-  const startListening = () => {
+  const handleRecognitionResult = useCallback((event: SpeechRecognitionEvent) => {
+    const results = event.results;
+    
+    // Process only new results
+    for (let i = processedResultsRef.current; i < results.length; i++) {
+      const result = results[i];
+      const transcript = result[0].transcript.trim();
+      
+      if (result.isFinal) {
+        // Final result - update word position
+        const spokenWords = transcript.split(/\s+/).filter(w => w.length > 0);
+        const currentIdx = currentWordIndexRef.current;
+        const matchedCount = findMatchingWords(spokenWords, currentIdx);
+        
+        if (matchedCount > 0) {
+          const newIndex = Math.min(currentIdx + matchedCount, words.length - 1);
+          setCurrentWordIndex(newIndex);
+          setStatus(`Recognized ${matchedCount} word(s). Now at word ${newIndex + 1}`);
+        }
+        
+        setRecognizedText(transcript);
+        processedResultsRef.current = i + 1;
+      } else {
+        // Interim result - just display it
+        setRecognizedText(transcript);
+      }
+    }
+  }, [findMatchingWords, words.length]);
+
+  const startListening = useCallback(() => {
     if (!recognitionRef.current) {
       setStatus("Speech Recognition not available");
       return;
     }
 
+    // Reset state
     setCurrentWordIndex(0);
+    currentWordIndexRef.current = 0;
+    processedResultsRef.current = 0;
+    setRecognizedText("");
     setStatus("Listening...");
     setIsListening(true);
 
     recognitionRef.current.onstart = () => {
-      setStatus("Listening...");
+      setStatus("Listening... Start reading!");
     };
 
-    recognitionRef.current.onresult = (event: any) => {
-      let interimTranscript = "";
+    recognitionRef.current.onresult = handleRecognitionResult;
 
-      for (let i = event.results.length - 1; i >= 0; i--) {
-        const transcript = event.results[i][0].transcript;
-
-        if (event.results[i].isFinal) {
-          handleRecognizedText(transcript);
-        } else {
-          interimTranscript += transcript;
-        }
-      }
-
-      if (interimTranscript) {
-        setRecognizedText(interimTranscript);
-      }
-    };
-
-    recognitionRef.current.onerror = (event: any) => {
+    recognitionRef.current.onerror = (event: SpeechRecognitionErrorEvent) => {
       setStatus(`Error: ${event.error}`);
-      setIsListening(false);
+      if (event.error !== 'no-speech') {
+        setIsListening(false);
+      }
     };
 
     recognitionRef.current.onend = () => {
-      setStatus("Stopped");
-      setIsListening(false);
+      // Auto-restart if still supposed to be listening (browser may stop after silence)
+      if (isListening) {
+        setStatus("Restarting...");
+        try {
+          recognitionRef.current?.start();
+        } catch {
+          setStatus("Stopped");
+          setIsListening(false);
+        }
+      } else {
+        setStatus("Stopped");
+      }
     };
 
-    recognitionRef.current.start();
-  };
+    try {
+      recognitionRef.current.start();
+    } catch (error) {
+      setStatus("Failed to start recognition");
+      setIsListening(false);
+      console.error(error);
+    }
+  }, [handleRecognitionResult, isListening]);
 
-  const stopListening = () => {
+  const stopListening = useCallback(() => {
+    setIsListening(false);
     if (recognitionRef.current) {
+      recognitionRef.current.onend = null; // Prevent auto-restart
       recognitionRef.current.stop();
     }
-    setIsListening(false);
     setStatus("Stopped");
-  };
+  }, []);
 
-  // Highlight current word in the text
-  const renderTextWithHighlight = (): ReactNode => {
-    const plainText = displayText.replace(/<[^>]*>/g, "");
-    const wordList = plainText.split(/(\s+)/);
-
-    let wordCounter = 0;
+  // Highlight current word in the text - using consistent word splitting
+  const renderTextWithHighlight = useCallback((): ReactNode => {
+    // Split text preserving whitespace for rendering
+    const parts = plainText.split(/(\s+)/);
+    
+    let wordIndex = 0;
 
     return (
       <>
-        {wordList.map((part, idx) => {
+        {parts.map((part, idx) => {
+          // If it's whitespace, render as-is
           if (/^\s+$/.test(part)) {
             return <span key={idx}>{part}</span>;
           }
+          
+          // Skip empty parts
+          if (part.length === 0) {
+            return null;
+          }
 
-          const isCurrentWord = wordCounter === currentWordIndex;
-          const isReadWord = wordCounter < currentWordIndex;
-          wordCounter++;
-
-          const className = [
-            isCurrentWord && "bg-yellow-300 font-bold",
-            isReadWord && "opacity-50",
-          ]
-            .filter(Boolean)
-            .join(" ");
+          const thisWordIndex = wordIndex;
+          wordIndex++;
+          
+          const isCurrentWord = thisWordIndex === currentWordIndex;
+          const isReadWord = thisWordIndex < currentWordIndex;
 
           return (
             <span
               key={idx}
-              className={className}
               style={{
                 backgroundColor: isCurrentWord ? "#fbbf24" : "transparent",
                 fontWeight: isCurrentWord ? "bold" : "normal",
                 opacity: isReadWord ? 0.5 : 1,
+                borderRadius: isCurrentWord ? "2px" : "0",
+                padding: isCurrentWord ? "0 2px" : "0",
+                transition: "all 0.15s ease-in-out",
               }}
             >
               {part}
@@ -193,7 +260,7 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
         })}
       </>
     );
-  };
+  }, [plainText, currentWordIndex]);
 
   return (
     <div
