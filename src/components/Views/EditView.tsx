@@ -81,6 +81,7 @@ export const EditView: React.FC<EditViewProps> = ({
             color: settings.fontColor === "gradient" ? "#1a1a1a" : settings.fontColor,
             lineHeight: settings.lineSpacing,
             cursor: "text",
+            backgroundColor: settings.backgroundColor,
           }}
         >
           <div
