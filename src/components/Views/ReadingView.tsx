@@ -322,12 +322,38 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
             Start Reading
           </Button>
         ) : (
-          <Button
-            onClick={stopListening}
-            icon={<StopIcon className="w-6 h-6" />}
-          >
-            Stop
-          </Button>
+          <>
+            <Button
+              onClick={stopListening}
+              icon={<StopIcon className="w-6 h-6" />}
+            >
+              Stop
+            </Button>
+            <Button
+              onClick={() => {
+                setCurrentWordIndex((prev) => Math.min(prev + 1, words.length - 1));
+                setStatus(`Skipped word. Now at word ${currentWordIndex + 2}`);
+              }}
+              icon={
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <polygon points="5 4 15 12 5 20 5 4"></polygon>
+                  <line x1="19" y1="5" x2="19" y2="19"></line>
+                </svg>
+              }
+            >
+              Skip Word
+            </Button>
+          </>
         )}
       </div>
     </div>
