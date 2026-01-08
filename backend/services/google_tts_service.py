@@ -23,7 +23,7 @@ def get_tts_client():
     return _tts_client
 
 
-def generate_speech_with_timestamps(text: str, language_code: str = 'en-US', voice_name: str = 'en-US-Chirp-HD-F'):
+def generate_speech_with_timestamps(text: str, language_code: str = 'en-US', voice_name: str = 'en-US-Neural2-H"'):
     """Generate speech from text using Google Cloud TTS Chirp3 with word timestamps.
     
     Args:
@@ -95,7 +95,7 @@ def generate_speech_with_timestamps(text: str, language_code: str = 'en-US', voi
     return response.audio_content, timestamps
 
 
-def generate_speech_with_word_level_timestamps(text: str, language_code: str = 'en-US', voice_name: str = 'en-US-Chirp-HD-F'):
+def generate_speech_with_word_level_timestamps(text: str, language_code: str = 'en-US', voice_name: str = 'en-US-Neural2-H"'):
     """Generate speech with accurate word-level timestamps using SSML marks.
     
     This method inserts SSML mark tags between words to get precise timing information.

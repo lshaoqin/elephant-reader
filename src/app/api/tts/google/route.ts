@@ -23,7 +23,7 @@ export async function POST(req: Request) {
         body: JSON.stringify({
           text,
           language_code: language_code || "en-US",
-          voice_name: voice_name || "en-US-Neural2-F",
+          voice_name: voice_name || "en-US-Neural2-H",
         }),
       });
 

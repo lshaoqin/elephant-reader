@@ -28,7 +28,7 @@ def google_text_to_speech():
         
         text = data['text']
         language_code = data.get('language_code', 'en-US')
-        voice_name = data.get('voice_name', 'en-US-Chirp-HD-F')
+        voice_name = data.get('voice_name', 'en-US-Neural2-H"')
         
         if not text or not text.strip():
             return jsonify({"error": "Empty text"}), 400
