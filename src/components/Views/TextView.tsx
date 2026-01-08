@@ -29,7 +29,7 @@ interface TextViewProps {
   onListen: () => void;
   onPlayPauseAudio: () => void;
   onStopAudio: () => void;
-  parseMarkdownText: (text: string) => ReactNode;
+  parseHtmlText: (html: string) => ReactNode;
   settings: TextSettings;
   onEditClick: () => void;
 }
@@ -47,7 +47,7 @@ export const TextView: React.FC<TextViewProps> = ({
   onListen,
   onPlayPauseAudio,
   onStopAudio,
-  parseMarkdownText,
+  parseHtmlText,
   settings,
   onEditClick,
 }) => {
@@ -145,8 +145,8 @@ export const TextView: React.FC<TextViewProps> = ({
   // Create a function to parse text with word highlighting
   const parseTextWithHighlight = (text: string): ReactNode => {
     if (!wordTimestamps || wordTimestamps.length === 0) {
-      // Default mode: Parse markdown and make words clickable for definitions
-      const displayText = text.replace(/\*\*/g, "");
+      // Default mode: Parse HTML and make words clickable for definitions
+      const displayText = text.replace(/<b>|<\/b>/g, "");
 
       if (settings.fontColor === "gradient") {
         // Apply gradient reading mode based on visual lines
@@ -164,13 +164,14 @@ export const TextView: React.FC<TextViewProps> = ({
       // Standard mode without gradient reading
       const words = displayText.split(/(\s+)/);
       
-      // Build a map of which character ranges are bold (from markdown)
+      // Build a map of which character ranges are bold (from HTML)
       const boldRanges: Array<{ start: number; end: number }> = [];
-      const regex = /\*\*(.+?)\*\*/g;
+      const regex = /<b>(.+?)<\/b>/g;
       let match;
       while ((match = regex.exec(text)) !== null) {
-        const starsBeforeBold = (text.substring(0, match.index).match(/\*\*/g) || []).length * 2;
-        const displayStart = match.index - starsBeforeBold;
+        const tagsBeforeBold = (text.substring(0, match.index).match(/<b>|<\/b>/g) || []).length;
+        const charsBeforeBold = tagsBeforeBold * 3; // Each tag is 3 chars (<b> or </b>)
+        const displayStart = match.index - charsBeforeBold;
         const innerLength = match[1].length;
         boldRanges.push({
           start: displayStart,
@@ -224,17 +225,18 @@ export const TextView: React.FC<TextViewProps> = ({
     }
 
     // Listening mode: Parse with highlighting, no clickable definitions
-    // Remove ** markers to get display text
-    const displayText = text.replace(/\*\*/g, "");
+    // Remove <b></b> tags to get display text
+    const displayText = text.replace(/<b>|<\/b>/g, "");
 
-    // Build a map of which character ranges are bold (from markdown)
+    // Build a map of which character ranges are bold (from HTML)
     const boldRanges: Array<{ start: number; end: number }> = [];
-    const regex = /\*\*(.+?)\*\*/g;
+    const regex = /<b>(.+?)<\/b>/g;
     let match;
     while ((match = regex.exec(text)) !== null) {
-      // Calculate the start and end positions in the display text (without **)
-      const starsBeforeBold = (text.substring(0, match.index).match(/\*\*/g) || []).length * 2;
-      const displayStart = match.index - starsBeforeBold;
+      // Calculate the start and end positions in the display text (without HTML tags)
+      const tagsBeforeBold = (text.substring(0, match.index).match(/<b>|<\/b>/g) || []).length;
+      const charsBeforeBold = tagsBeforeBold * 3; // Each tag is 3 chars (<b> or </b>)
+      const displayStart = match.index - charsBeforeBold;
       const innerLength = match[1].length;
       boldRanges.push({
         start: displayStart,

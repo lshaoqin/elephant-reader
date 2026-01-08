@@ -31,16 +31,16 @@ interface WordTimestamp {
 type ViewMode = "upload" | "image" | "text" | "settings" | "edit";
 
 // Function to parse markdown formatting (**text** -> bold)
-function parseMarkdownText(text: string): ReactNode {
+function parseHtmlText(html: string): ReactNode {
   const parts: ReactNode[] = [];
-  const regex = /\*\*(.+?)\*\*/g;
+  const regex = /<b>(.+?)<\/b>/g;
   let lastIndex = 0;
   let match;
 
-  while ((match = regex.exec(text)) !== null) {
+  while ((match = regex.exec(html)) !== null) {
     // Add text before the bold part
     if (match.index > lastIndex) {
-      parts.push(text.substring(lastIndex, match.index));
+      parts.push(html.substring(lastIndex, match.index));
     }
     // Add bold text
     parts.push(
@@ -50,11 +50,11 @@ function parseMarkdownText(text: string): ReactNode {
   }
 
   // Add remaining text
-  if (lastIndex < text.length) {
-    parts.push(text.substring(lastIndex));
+  if (lastIndex < html.length) {
+    parts.push(html.substring(lastIndex));
   }
 
-  return parts.length > 0 ? parts : text;
+  return parts.length > 0 ? parts : html;
 }
 
 const DEFAULT_SETTINGS: TextSettings = {
@@ -452,7 +452,7 @@ export default function Page() {
           onListen={handleListen}
           onPlayPauseAudio={handlePlayPauseAudio}
           onStopAudio={handleStopAudio}
-          parseMarkdownText={parseMarkdownText}
+            parseHtmlText={parseHtmlText}
           onEditClick={() => {
             setPreviousViewMode("text");
             setViewMode("edit");
@@ -516,7 +516,6 @@ export default function Page() {
           setViewMode("settings");
         }}
         settings={settings}
-        parseMarkdownText={parseMarkdownText}
       />
     );
   }

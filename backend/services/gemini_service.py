@@ -23,7 +23,7 @@ def format_text_with_gemini(raw_text: str) -> str:
 1. Correct any OCR inaccuracies or misspellings
 2. Remove hyphens that result from words being split across lines (e.g., "hap-pened" -> "happened")
 3. Add paragraph breaks where appropriate for readability and logical grouping
-4. Bold section titles or headings using **text** format
+4. Bold section titles or headings using <b>text</b> format
 5. Preserve the overall structure and meaning of the original text
 
 IMPORTANT: Only format and correct the text provided. Do NOT generate, add, or expand content beyond what is given. Do NOT write articles, stories, or additional text.

@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState, ReactNode, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { CheckIcon } from "@radix-ui/react-icons";
-import { Header, Button } from "@/components";
+import { Header, Button, TextViewBox } from "@/components";
 import type { TextSettings } from "./SettingsView";
 
 interface EditViewProps {
@@ -11,7 +11,6 @@ interface EditViewProps {
   onSave: (text: string) => void;
   onSettingsClick: () => void;
   settings: TextSettings;
-  parseMarkdownText: (text: string) => ReactNode;
 }
 
 export const EditView: React.FC<EditViewProps> = ({
@@ -20,16 +19,21 @@ export const EditView: React.FC<EditViewProps> = ({
   onSave,
   onSettingsClick,
   settings,
-  parseMarkdownText,
 }) => {
-  const [text, setText] = useState(initialText);
+  const [htmlContent, setHtmlContent] = useState(initialText);
   const [selectedRange, setSelectedRange] = useState<{ start: number; end: number } | null>(null);
   const editorRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Initialize editor with content
+  useEffect(() => {
+    if (editorRef.current && !editorRef.current.innerHTML) {
+      editorRef.current.innerHTML = initialText;
+    }
+  }, []);
 
   const handleInputChange = () => {
     if (editorRef.current) {
-      setText(editorRef.current.textContent || "");
+      setHtmlContent(editorRef.current.innerHTML);
     }
   };
 
@@ -48,33 +52,16 @@ export const EditView: React.FC<EditViewProps> = ({
   const handleMouseUp = updateSelectionRange;
   const handleKeyUp = updateSelectionRange;
 
-  const applyFormatting = (beforeFormat: string, afterFormat: string) => {
-    const selection = window.getSelection();
-    if (!selection || !selection.toString()) return;
-
-    const selectedText = selection.toString();
-    const newText =
-      text.substring(0, text.indexOf(selectedText)) +
-      beforeFormat +
-      selectedText +
-      afterFormat +
-      text.substring(text.indexOf(selectedText) + selectedText.length);
-
-    setText(newText);
-    
-    // Update the contenteditable div
+  const handleBold = () => {
+    document.execCommand("bold", false);
     if (editorRef.current) {
-      editorRef.current.textContent = newText;
       editorRef.current.focus();
+      setHtmlContent(editorRef.current.innerHTML);
     }
   };
 
-  const handleBold = () => {
-    applyFormatting("**", "**");
-  };
-
   const handleSave = () => {
-    onSave(text);
+    onSave(htmlContent);
   };
 
   return (
@@ -84,29 +71,33 @@ export const EditView: React.FC<EditViewProps> = ({
     >
       <Header onBackClick={onBackClick} onSettingsClick={onSettingsClick} />
 
-      {/* Content area with contenteditable div */}
+      {/* Content area with editable TextViewBox */}
       <div className="flex-1 overflow-auto p-6 sm:p-8 lg:p-12 flex flex-col items-start justify-start">
-        {/* Contenteditable div showing formatted markdown */}
-        <div
-          ref={editorRef}
-          contentEditable
-          suppressContentEditableWarning
-          onInput={handleInputChange}
-          onMouseUp={handleMouseUp}
-          onKeyUp={handleKeyUp}
-          className="w-full h-full outline-none text-base sm:text-lg leading-relaxed"
+        <TextViewBox
+          className="outline-none"
           style={{
             fontFamily: settings.fontFamily,
             fontSize: `${settings.fontSize}px`,
             color: settings.fontColor === "gradient" ? "#1a1a1a" : settings.fontColor,
             lineHeight: settings.lineSpacing,
-            whiteSpace: "pre-wrap",
-            wordWrap: "break-word",
-            overflowWrap: "break-word",
+            cursor: "text",
           }}
         >
-          {parseMarkdownText(initialText)}
-        </div>
+          <div
+            ref={editorRef}
+            contentEditable
+            suppressContentEditableWarning
+            onInput={handleInputChange}
+            onMouseUp={handleMouseUp}
+            onKeyUp={handleKeyUp}
+            className="focus:outline-none focus:ring-0"
+            style={{
+              whiteSpace: "pre-wrap",
+              wordWrap: "break-word",
+              overflowWrap: "break-word",
+            }}
+          />
+        </TextViewBox>
       </div>
 
       {/* Tablet-optimized footer with formatting buttons */}
