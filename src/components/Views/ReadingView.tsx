@@ -245,6 +245,10 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
           return (
             <span
               key={idx}
+              onClick={() => {
+                setCurrentWordIndex(thisWordIndex);
+                setStatus(`Jumped to word ${thisWordIndex + 1}`);
+              }}
               style={{
                 backgroundColor: isCurrentWord ? "#fbbf24" : "transparent",
                 fontWeight: isCurrentWord ? "bold" : "normal",
@@ -252,6 +256,7 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
                 borderRadius: isCurrentWord ? "2px" : "0",
                 padding: isCurrentWord ? "0 2px" : "0",
                 transition: "all 0.15s ease-in-out",
+                cursor: "pointer",
               }}
             >
               {part}
