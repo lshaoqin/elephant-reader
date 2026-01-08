@@ -483,6 +483,7 @@ export const TextView: React.FC<TextViewProps> = ({
                   src="/mic.svg"
                   alt="Read"
                   className="w-6 h-6"
+                  style={{ filter: 'invert(38%) sepia(96%) saturate(2948%) hue-rotate(200deg) brightness(98%) contrast(101%)' }}
                   suppressHydrationWarning
                 />
               }
