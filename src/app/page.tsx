@@ -377,6 +377,17 @@ export default function Page() {
         loading={loading}
         error={error}
         onFileChange={handleFileChange}
+        onWriteTextClick={() => {
+          // Set up a minimal result structure to enable EditView
+          setResult({
+            blocks: [{ text: "", vertices: [] }],
+            full_text: "",
+            image_base64: "",
+          });
+          setSelectedBlockIndex(0);
+          setFormattedCache({ "0": "" });
+          setViewMode("edit");
+        }}
       />
     );
   }
@@ -445,7 +456,8 @@ export default function Page() {
             setIsLoadingAudio(false);
             setCachedAudioUrl(null);
             setCachedAudioKey(null);
-            setViewMode("image");
+            // If there's no image (user wrote text directly), go to upload view
+            setViewMode(result?.image_base64 ? "image" : "upload");
             setWordTimestamps([]);
             setCurrentPlaybackTime(0);
           }}

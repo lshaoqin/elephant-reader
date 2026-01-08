@@ -4,6 +4,7 @@ import React from "react";
 import {
   CameraIcon,
   UploadIcon,
+  Pencil2Icon,
 } from "@radix-ui/react-icons";
 import { LoadingSpinner, ViewBox } from "@/components";
 
@@ -11,12 +12,14 @@ interface UploadViewProps {
   loading: boolean;
   error: string | null;
   onFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onWriteTextClick: () => void;
 }
 
 export const UploadView: React.FC<UploadViewProps> = ({
   loading,
   error,
   onFileChange,
+  onWriteTextClick,
 }) => {
   return (
     <div className="flex min-h-screen items-center justify-center bg-white dark:bg-slate-950">
@@ -69,6 +72,27 @@ export const UploadView: React.FC<UploadViewProps> = ({
               className="hidden"
             />
           </label>
+        </div>
+
+        <div className="flex flex-col items-center gap-2 w-full max-w-2xl">
+          <p
+            className="text-sm text-gray-500 dark:text-gray-400"
+            style={{ fontFamily: "Verdana, Arial, Helvetica, sans-serif" }}
+          >
+            or
+          </p>
+          <button
+            onClick={onWriteTextClick}
+            className="flex flex-row items-center justify-center gap-3 px-8 py-4 border-2 border-blue-400 rounded-lg cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-950 transition-colors w-full max-w-md"
+          >
+            <Pencil2Icon className="w-6 h-6 text-blue-600 transition-colors" />
+            <span
+              className="font-semibold text-base text-blue-600 dark:text-blue-400"
+              style={{ fontFamily: "Verdana, Arial, Helvetica, sans-serif" }}
+            >
+              Write text instead
+            </span>
+          </button>
         </div>
         {loading && (
           <LoadingSpinner
