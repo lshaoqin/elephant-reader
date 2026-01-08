@@ -263,7 +263,7 @@ export default function Page() {
       // Remove HTML tags before sending to TTS
       const plainText = displayText.replace(/<[^>]*>/g, "");
       
-      const response = await fetch("/api/tts", {
+      const response = await fetch("/api/tts/google", {
         signal: ttsAbortControllerRef.current.signal,
         method: "POST",
         headers: { "Content-Type": "application/json" },

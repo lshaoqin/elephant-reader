@@ -5,6 +5,7 @@ from config import FLASK_HOST, FLASK_PORT, FLASK_DEBUG, CORS_ENABLED
 from routes.extract import extract_bp
 from routes.format_text import format_text_bp
 from routes.tts import tts_bp
+from routes.google_tts import google_tts_bp
 from routes.health import health_bp
 from routes.define_word import define_word_bp
 
@@ -25,6 +26,7 @@ def create_app():
     app.register_blueprint(extract_bp)
     app.register_blueprint(format_text_bp)
     app.register_blueprint(tts_bp)
+    app.register_blueprint(google_tts_bp)
     app.register_blueprint(health_bp)
     app.register_blueprint(define_word_bp)
     
