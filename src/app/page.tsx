@@ -260,11 +260,14 @@ export default function Page() {
     ttsAbortControllerRef.current = new AbortController();
 
     try {
+      // Remove HTML tags before sending to TTS
+      const plainText = displayText.replace(/<[^>]*>/g, "");
+      
       const response = await fetch("/api/tts", {
         signal: ttsAbortControllerRef.current.signal,
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: displayText }),
+        body: JSON.stringify({ text: plainText }),
       });
 
       if (!response.ok) {
