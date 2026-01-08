@@ -402,6 +402,12 @@ export default function Page() {
         formattingBlockIndex={formattingBlockIndex}
         settings={settings}
         onBackClick={() => {
+          // Warn user before losing document
+          const confirmed = window.confirm(
+            "You will lose your document if you go back. Are you sure you want to continue?"
+          );
+          if (!confirmed) return;
+          
           // Abort any ongoing TTS request
           if (ttsAbortControllerRef.current) {
             ttsAbortControllerRef.current.abort();
@@ -442,6 +448,15 @@ export default function Page() {
           currentPlaybackTime={currentPlaybackTime}
           settings={settings}
           onBackClick={() => {
+            // Only warn if going back to upload view (no image means it's a written document)
+            const goingToUpload = !result?.image_base64;
+            if (goingToUpload) {
+              const confirmed = window.confirm(
+                "Going back will lose your document. Are you sure you want to continue?"
+              );
+              if (!confirmed) return;
+            }
+            
             // Abort any ongoing TTS request
             if (ttsAbortControllerRef.current) {
               ttsAbortControllerRef.current.abort();
