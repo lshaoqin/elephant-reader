@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import React, { useState, useRef, ReactNode } from "react";
@@ -13,8 +14,8 @@ interface ReadingViewProps {
 }
 
 interface SpeechRecognitionEvent extends Event {
-  results: SpeechRecognitionResultList;
-  isFinal: boolean;
+  results: any;
+  isFinal?: boolean;
 }
 
 interface SpeechRecognitionErrorEvent extends Event {
@@ -37,21 +38,6 @@ declare global {
     onresult: ((event: SpeechRecognitionEvent) => void) | null;
     onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
     onend: ((event: Event) => void) | null;
-  }
-  interface SpeechRecognitionResultList {
-    length: number;
-    item(index: number): SpeechRecognitionResult;
-    [index: number]: SpeechRecognitionResult;
-  }
-  interface SpeechRecognitionResult {
-    length: number;
-    item(index: number): SpeechRecognitionAlternative;
-    isFinal: boolean;
-    [index: number]: SpeechRecognitionAlternative;
-  }
-  interface SpeechRecognitionAlternative {
-    transcript: string;
-    confidence: number;
   }
 }
 
@@ -127,7 +113,7 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
       setStatus("Listening...");
     };
 
-    recognitionRef.current.onresult = (event: SpeechRecognitionEvent) => {
+    recognitionRef.current.onresult = (event: any) => {
       let interimTranscript = "";
 
       for (let i = event.results.length - 1; i >= 0; i--) {
@@ -145,7 +131,7 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
       }
     };
 
-    recognitionRef.current.onerror = (event: SpeechRecognitionErrorEvent) => {
+    recognitionRef.current.onerror = (event: any) => {
       setStatus(`Error: ${event.error}`);
       setIsListening(false);
     };
