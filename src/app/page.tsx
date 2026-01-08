@@ -452,7 +452,7 @@ export default function Page() {
             const goingToUpload = !result?.image_base64;
             if (goingToUpload) {
               const confirmed = window.confirm(
-                "Going back will lose your document. Are you sure you want to continue?"
+                "You will lose your document if you go back. Are you sure you want to continue?"
               );
               if (!confirmed) return;
             }
