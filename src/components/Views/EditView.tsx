@@ -29,7 +29,7 @@ export const EditView: React.FC<EditViewProps> = ({
     if (editorRef.current && !editorRef.current.innerHTML) {
       editorRef.current.innerHTML = initialText;
     }
-  }, []);
+  }, [initialText]);
 
   const handleInputChange = () => {
     if (editorRef.current) {

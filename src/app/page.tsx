@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, ReactNode, useEffect } from "react";
-import { UploadView, ImageView, TextView, SettingsView, EditView } from "@/components/Views";
+import { UploadView, ImageView, TextView, SettingsView, EditView, ReadingView } from "@/components/Views";
 import type { TextSettings } from "@/components/Views/SettingsView";
 
 interface TextBlock {
@@ -28,7 +28,8 @@ interface WordTimestamp {
   end: number;
 }
 
-type ViewMode = "upload" | "image" | "text" | "settings" | "edit";
+type ViewMode = "upload" | "image" | "text" | "settings" | "edit" | "reading";
+
 
 // Function to parse markdown formatting (**text** -> bold)
 function parseHtmlText(html: string): ReactNode {
@@ -452,10 +453,13 @@ export default function Page() {
           onListen={handleListen}
           onPlayPauseAudio={handlePlayPauseAudio}
           onStopAudio={handleStopAudio}
-            parseHtmlText={parseHtmlText}
           onEditClick={() => {
             setPreviousViewMode("text");
             setViewMode("edit");
+          }}
+          onReadClick={() => {
+            setPreviousViewMode("text");
+            setViewMode("reading");
           }}
         />
         <audio 
@@ -513,6 +517,26 @@ export default function Page() {
         onSave={handleEditSave}
         onSettingsClick={() => {
           setPreviousViewMode("edit");
+          setViewMode("settings");
+        }}
+        settings={settings}
+      />
+    );
+  }
+
+  // Reading View
+  if (viewMode === "reading" && result) {
+    const cacheKey = selectedBlockIndex !== null ? `block-${selectedBlockIndex}` : null;
+    const displayText = selectedBlockIndex !== null 
+      ? formattedCache[cacheKey!] || result.blocks[selectedBlockIndex]?.text 
+      : result.full_text;
+
+    return (
+      <ReadingView
+        displayText={displayText}
+        onBackClick={() => setViewMode("text")}
+        onSettingsClick={() => {
+          setPreviousViewMode("reading");
           setViewMode("settings");
         }}
         settings={settings}

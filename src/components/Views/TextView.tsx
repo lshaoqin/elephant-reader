@@ -29,9 +29,9 @@ interface TextViewProps {
   onListen: () => void;
   onPlayPauseAudio: () => void;
   onStopAudio: () => void;
-  parseHtmlText: (html: string) => ReactNode;
   settings: TextSettings;
   onEditClick: () => void;
+  onReadClick: () => void;
 }
 
 export const TextView: React.FC<TextViewProps> = ({
@@ -47,9 +47,9 @@ export const TextView: React.FC<TextViewProps> = ({
   onListen,
   onPlayPauseAudio,
   onStopAudio,
-  parseHtmlText,
   settings,
   onEditClick,
+  onReadClick,
 }) => {
   const [hasAudioLoaded, setHasAudioLoaded] = useState(false);
   const [selectedWord, setSelectedWord] = useState<string | null>(null);
@@ -139,8 +139,6 @@ export const TextView: React.FC<TextViewProps> = ({
 
     return map;
   };
-
-  const textContainerRef = React.useRef<HTMLDivElement>(null);
 
   // Create a function to parse text with word highlighting
   const parseTextWithHighlight = (text: string): ReactNode => {
@@ -479,6 +477,7 @@ export const TextView: React.FC<TextViewProps> = ({
               Listen
             </Button>
             <Button
+              onClick={onReadClick}
               icon={
                 <img
                   src="/mic.svg"
