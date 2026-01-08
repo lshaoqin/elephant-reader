@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, ReactNode } from "react";
+import React, { useState, ReactNode, useRef } from "react";
 import { CheckIcon } from "@radix-ui/react-icons";
 import { Header, Button } from "@/components";
 import type { TextSettings } from "./SettingsView";
@@ -24,21 +24,24 @@ export const EditView: React.FC<EditViewProps> = ({
 }) => {
   const [text, setText] = useState(initialText);
   const [selectedRange, setSelectedRange] = useState<{ start: number; end: number } | null>(null);
-  const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+  const editorRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setText(e.target.value);
+  const handleInputChange = () => {
+    if (editorRef.current) {
+      setText(editorRef.current.textContent || "");
+    }
   };
 
   const updateSelectionRange = () => {
-    if (textareaRef.current) {
-      const start = textareaRef.current.selectionStart;
-      const end = textareaRef.current.selectionEnd;
-      if (start !== end) {
-        setSelectedRange({ start, end });
-      } else {
-        setSelectedRange(null);
-      }
+    const selection = window.getSelection();
+    if (selection && selection.toString()) {
+      setSelectedRange({
+        start: 0,
+        end: selection.toString().length,
+      });
+    } else {
+      setSelectedRange(null);
     }
   };
 
@@ -46,26 +49,24 @@ export const EditView: React.FC<EditViewProps> = ({
   const handleKeyUp = updateSelectionRange;
 
   const applyFormatting = (beforeFormat: string, afterFormat: string) => {
-    if (!selectedRange || textareaRef.current === null) return;
+    const selection = window.getSelection();
+    if (!selection || !selection.toString()) return;
 
-    const { start, end } = selectedRange;
-    const selectedText = text.substring(start, end);
+    const selectedText = selection.toString();
     const newText =
-      text.substring(0, start) +
+      text.substring(0, text.indexOf(selectedText)) +
       beforeFormat +
       selectedText +
       afterFormat +
-      text.substring(end);
+      text.substring(text.indexOf(selectedText) + selectedText.length);
 
     setText(newText);
-    setSelectedRange(null);
-
-    // Reset selection in textarea
-    setTimeout(() => {
-      if (textareaRef.current) {
-        textareaRef.current.focus();
-      }
-    }, 0);
+    
+    // Update the contenteditable div
+    if (editorRef.current) {
+      editorRef.current.textContent = newText;
+      editorRef.current.focus();
+    }
   };
 
   const handleBold = () => {
@@ -83,23 +84,29 @@ export const EditView: React.FC<EditViewProps> = ({
     >
       <Header onBackClick={onBackClick} onSettingsClick={onSettingsClick} />
 
-      {/* Content area styled like TextView */}
+      {/* Content area with contenteditable div */}
       <div className="flex-1 overflow-auto p-6 sm:p-8 lg:p-12 flex flex-col items-start justify-start">
-        <textarea
-          ref={textareaRef}
-          value={text}
-          onChange={handleTextChange}
+        {/* Contenteditable div showing formatted markdown */}
+        <div
+          ref={editorRef}
+          contentEditable
+          suppressContentEditableWarning
+          onInput={handleInputChange}
           onMouseUp={handleMouseUp}
           onKeyUp={handleKeyUp}
-          className="w-full h-full px-6 sm:px-8 lg:px-12 pt-6 sm:pt-8 lg:pt-12 pb-0 bg-transparent border-none focus:outline-none resize-none text-base sm:text-lg leading-relaxed"
+          className="w-full h-full outline-none text-base sm:text-lg leading-relaxed"
           style={{
             fontFamily: settings.fontFamily,
             fontSize: `${settings.fontSize}px`,
             color: settings.fontColor === "gradient" ? "#1a1a1a" : settings.fontColor,
             lineHeight: settings.lineSpacing,
-            backgroundColor: "transparent",
+            whiteSpace: "pre-wrap",
+            wordWrap: "break-word",
+            overflowWrap: "break-word",
           }}
-        />
+        >
+          {parseMarkdownText(initialText)}
+        </div>
       </div>
 
       {/* Tablet-optimized footer with formatting buttons */}
