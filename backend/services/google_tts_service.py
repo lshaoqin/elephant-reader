@@ -99,6 +99,7 @@ def generate_speech_with_word_level_timestamps(text: str, language_code: str = '
     """Generate speech with accurate word-level timestamps using SSML marks.
     
     This method inserts SSML mark tags between words to get precise timing information.
+    Handles paragraph breaks (double newlines) with SSML <break> tags.
     
     Args:
         text: Text to convert to speech
@@ -110,13 +111,26 @@ def generate_speech_with_word_level_timestamps(text: str, language_code: str = '
     """
     client = get_tts_client()
     
-    # Split text into words and create SSML with mark tags
-    words = text.split()
-    ssml_parts = ['<speak>']
+    # Split text into paragraphs and create SSML with mark tags
+    # First, normalize newlines and split by double newlines
+    paragraphs = text.split('\n\n')
     
-    for i, word in enumerate(words):
-        mark_name = f"word_{i}"
-        ssml_parts.append(f'<mark name="{mark_name}"/>{word}')
+    ssml_parts = ['<speak>']
+    word_index = 0
+    
+    for paragraph in paragraphs:
+        # Add paragraph tags
+        ssml_parts.append('<p>')
+        
+        # Split paragraph into words
+        words = paragraph.split()
+        
+        for word in words:
+            mark_name = f"word_{word_index}"
+            ssml_parts.append(f'<mark name="{mark_name}"/>{word}')
+            word_index += 1
+        
+        ssml_parts.append('</p>')
     
     ssml_parts.append('</speak>')
     ssml_text = ' '.join(ssml_parts)
@@ -159,18 +173,22 @@ def generate_speech_with_word_level_timestamps(text: str, language_code: str = '
             timepoint_dict[mark_name] = time_seconds
     
     # Create timestamps with start and end times
-    for i, word in enumerate(words):
-        mark_name = f"word_{i}"
-        start_time = timepoint_dict.get(mark_name, 0.0)
-        
-        # End time is the start of the next word
-        next_mark = f"word_{i + 1}"
-        end_time = timepoint_dict.get(next_mark, start_time + 0.3)  # Default 300ms if no next word
-        
-        timestamps.append({
-            "word": word,
-            "start": start_time,
-            "end": end_time
-        })
+    word_index = 0
+    for paragraph in paragraphs:
+        words = paragraph.split()
+        for word in words:
+            mark_name = f"word_{word_index}"
+            start_time = timepoint_dict.get(mark_name, 0.0)
+            
+            # End time is the start of the next word
+            next_mark = f"word_{word_index + 1}"
+            end_time = timepoint_dict.get(next_mark, start_time + 0.3)  # Default 300ms if no next word
+            
+            timestamps.append({
+                "word": word,
+                "start": start_time,
+                "end": end_time
+            })
+            word_index += 1
     
     return response.audio_content, timestamps
