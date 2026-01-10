@@ -3,12 +3,14 @@ import React, { useLayoutEffect, useMemo, useRef, useState } from "react";
 interface Word {
   text: string;
   isWhitespace: boolean;
+  isBold: boolean;
 }
 
 interface WordWithColor {
   text: string;
   color: string;
   isWhitespace: boolean;
+  isBold: boolean;
 }
 
 interface GradientReaderProps {
@@ -70,18 +72,58 @@ export const GradientReader: React.FC<GradientReaderProps> = ({
   const wordRefsRef = useRef<(HTMLSpanElement | null)[]>([]);
   const [coloredWords, setColoredWords] = useState<WordWithColor[]>([]);
 
-  // Parse text into words
-  const words: Word[] = useMemo(
-    () =>
-      text
-        .split(/(\s+)/)
-        .filter((token) => token.length > 0)
-        .map((token) => ({
-          text: token,
-          isWhitespace: /^\s+$/.test(token),
-        })),
-    [text]
-  );
+  // Parse text into words, handling bold tags
+  const words: Word[] = useMemo(() => {
+    // Remove HTML tags to get display text
+    const displayText = text.replace(/<b>|<\/b>/g, "");
+    
+    // Build a map of which character ranges are bold (from HTML)
+    const boldRanges: Array<{ start: number; end: number }> = [];
+    const regex = /<b>(.+?)<\/b>/g;
+    let match;
+    while ((match = regex.exec(text)) !== null) {
+      const tagsBeforeBold = (text.substring(0, match.index).match(/<b>|<\/b>/g) || []).length;
+      const charsBeforeBold = tagsBeforeBold * 3; // Each tag is 3 chars (<b> or </b>)
+      const displayStart = match.index - charsBeforeBold;
+      const innerLength = match[1].length;
+      boldRanges.push({
+        start: displayStart,
+        end: displayStart + innerLength,
+      });
+    }
+
+    const isBold = (start: number, end: number) => {
+      return boldRanges.some(
+        (range) => start < range.end && end > range.start
+      );
+    };
+
+    // Split display text into words
+    const tokens = displayText
+      .split(/(\s+)/)
+      .filter((token) => token.length > 0);
+    
+    return tokens.reduce<{ words: Word[]; pos: number }>(
+      (acc, token) => {
+        const partStart = acc.pos;
+        const partEnd = acc.pos + token.length;
+        const shouldBold = isBold(partStart, partEnd);
+
+        return {
+          words: [
+            ...acc.words,
+            {
+              text: token,
+              isWhitespace: /^\s+$/.test(token),
+              isBold: shouldBold,
+            },
+          ],
+          pos: partEnd,
+        };
+      },
+      { words: [], pos: 0 }
+    ).words;
+  }, [text]);
 
   useLayoutEffect(() => {
     if (!containerRef.current) return;
@@ -147,6 +189,7 @@ export const GradientReader: React.FC<GradientReaderProps> = ({
         text: word.text,
         color,
         isWhitespace: word.isWhitespace,
+        isBold: word.isBold,
       };
     });
 
@@ -164,6 +207,7 @@ export const GradientReader: React.FC<GradientReaderProps> = ({
           }}
           style={{
             color: word.color,
+            fontWeight: word.isBold ? "bold" : "normal",
           }}
           className={!word.isWhitespace ? "cursor-pointer hover:underline" : ""}
           onClick={() => {

@@ -144,13 +144,12 @@ export const TextView: React.FC<TextViewProps> = ({
   const parseTextWithHighlight = (text: string): ReactNode => {
     if (!wordTimestamps || wordTimestamps.length === 0) {
       // Default mode: Parse HTML and make words clickable for definitions
-      const displayText = text.replace(/<b>|<\/b>/g, "");
 
       if (settings.fontColor === "gradient") {
         // Apply gradient reading mode based on visual lines
         return (
           <GradientReader
-            text={displayText}
+            text={text}
             onWordClick={(word) => {
               setSelectedWord(word);
               setIsPopoverOpen(true);
@@ -158,6 +157,8 @@ export const TextView: React.FC<TextViewProps> = ({
           />
         );
       }
+
+      const displayText = text.replace(/<b>|<\/b>/g, "");
 
       // Standard mode without gradient reading
       const words = displayText.split(/(\s+)/);
