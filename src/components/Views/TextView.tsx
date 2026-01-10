@@ -497,9 +497,9 @@ export const TextView: React.FC<TextViewProps> = ({
             >
               Edit
             </Button>
-            <Button icon={<BookmarkIcon className="w-6 h-6" />}>
+            {/* <Button icon={<BookmarkIcon className="w-6 h-6" />}>
               Notes
-            </Button>
+            </Button> */}
           </>
         )}
       </div>
