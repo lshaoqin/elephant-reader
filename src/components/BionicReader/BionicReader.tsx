@@ -73,10 +73,13 @@ export const GradientReader: React.FC<GradientReaderProps> = ({
   // Parse text into words
   const words: Word[] = useMemo(
     () =>
-      text.split(/(\s+)/).map((token) => ({
-        text: token,
-        isWhitespace: /^\s+$/.test(token),
-      })),
+      text
+        .split(/(\s+)/)
+        .filter((token) => token.length > 0)
+        .map((token) => ({
+          text: token,
+          isWhitespace: /^\s+$/.test(token),
+        })),
     [text]
   );
 
@@ -123,7 +126,7 @@ export const GradientReader: React.FC<GradientReaderProps> = ({
         if (lineWordIndices.includes(idx)) {
           // Get non-whitespace words in this line
           const nonWhitespaceIndices = lineWordIndices.filter(
-            (i) => !words[i].isWhitespace
+            (i) => words[i] && !words[i].isWhitespace
           );
 
           if (!word.isWhitespace && nonWhitespaceIndices.length > 0) {
