@@ -18,6 +18,7 @@ interface SettingsViewProps {
 }
 
 const FONT_FAMILIES = [
+  { name: "Geist", value: "var(--font-geist-sans), sans-serif" },
   { name: "Verdana", value: "Verdana, sans-serif" },
   { name: "Arial", value: "Arial, sans-serif" },
   { name: "Helvetica", value: "Helvetica, sans-serif" },
@@ -77,7 +78,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
   const handleRestoreDefaults = () => {
     onSettingsChange({
-      fontFamily: "Verdana, sans-serif",
+      fontFamily: "var(--font-geist-sans), sans-serif",
       fontSize: 20,
       fontColor: "#1a1a1a",
       lineSpacing: 1.5,

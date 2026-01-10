@@ -59,7 +59,7 @@ function parseHtmlText(html: string): ReactNode {
 }
 
 const DEFAULT_SETTINGS: TextSettings = {
-  fontFamily: "Verdana, sans-serif",
+  fontFamily: "var(--font-geist-sans), sans-serif",
   fontSize: 20,
   fontColor: "#1a1a1a",
   lineSpacing: 1.5,
