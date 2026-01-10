@@ -21,8 +21,8 @@ RUN pip install --upgrade pip && \
 # Copy application code
 COPY . .
 
-# Expose port
-EXPOSE 5000
+# Expose port (Cloud Run uses PORT env var, defaults to 8080)
+EXPOSE 8080
 
-# Run the Flask app
-CMD ["python", "app.py"]
+# Run with Gunicorn for production
+CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "4", "--timeout", "120", "app:app"]

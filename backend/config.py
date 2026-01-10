@@ -17,5 +17,5 @@ TTS_SAMPLE_RATE = 24000
 # Flask Configuration
 FLASK_DEBUG = False
 FLASK_HOST = '0.0.0.0'
-FLASK_PORT = 5000
+FLASK_PORT = int(os.getenv('PORT', 8080))  # Cloud Run uses PORT env var
 CORS_ENABLED = True
