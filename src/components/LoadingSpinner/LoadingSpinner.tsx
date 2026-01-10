@@ -32,14 +32,16 @@ export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
         ></div>
       </div>
       {label && (
-        <p
-          className={`text-gray-600 dark:text-gray-400 font-semibold ${
-            size === "lg" ? "text-xl" : size === "sm" ? "text-sm" : "text-base"
-          }`}
-          style={{ fontFamily: "Verdana, Arial, Helvetica, sans-serif" }}
-        >
-          {label}
-        </p>
+        <div className="px-4 py-2 bg-black/70 rounded-lg">
+          <p
+            className={`text-white font-semibold ${
+              size === "lg" ? "text-xl" : size === "sm" ? "text-sm" : "text-base"
+            }`}
+            style={{ fontFamily: "Verdana, Arial, Helvetica, sans-serif" }}
+          >
+            {label}
+          </p>
+        </div>
       )}
     </div>
   );
