@@ -75,12 +75,6 @@ export const UploadView: React.FC<UploadViewProps> = ({
         </div>
 
         <div className="flex flex-col items-center gap-2 w-full max-w-2xl">
-          <p
-            className="text-sm text-gray-500 dark:text-gray-400"
-            style={{ fontFamily: "Verdana, Arial, Helvetica, sans-serif" }}
-          >
-            or
-          </p>
           <button
             onClick={onWriteTextClick}
             className="flex flex-row items-center justify-center gap-3 px-8 py-4 border-2 border-blue-400 rounded-lg cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-950 transition-colors w-full max-w-md"
