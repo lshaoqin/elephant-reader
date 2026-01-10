@@ -43,10 +43,7 @@ const BACKGROUND_COLORS = [
 const FONT_COLORS = [
   { name: "Black", value: "#1a1a1a" },
   { name: "Dark Gray", value: "#6b7280" },
-  { name: "Blue", value: "#3b82f6" },
-  { name: "Dark Green", value: "#34d399" },
-  { name: "Dark Red", value: "#ef4444" },
-  { name: "Dark Purple", value: "#a78bfa" },
+  { name: "Blue", value: "#1e40af" },
   { name: "Gradient Reading", value: "gradient" },
 ];
 
