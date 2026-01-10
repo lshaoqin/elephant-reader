@@ -6,13 +6,16 @@ import {
   UploadIcon,
   Pencil2Icon,
 } from "@radix-ui/react-icons";
-import { LoadingSpinner, ViewBox } from "@/components";
+import { LoadingSpinner, ViewBox, Header } from "@/components";
+import type { TextSettings } from "./SettingsView";
 
 interface UploadViewProps {
   loading: boolean;
   error: string | null;
   onFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onWriteTextClick: () => void;
+  settings?: TextSettings;
+  onSettingsClick?: () => void;
 }
 
 export const UploadView: React.FC<UploadViewProps> = ({
@@ -20,20 +23,31 @@ export const UploadView: React.FC<UploadViewProps> = ({
   error,
   onFileChange,
   onWriteTextClick,
+  settings,
+  onSettingsClick,
 }) => {
+  const getFontFamily = () => {
+    if (!settings) return "var(--font-geist-sans), sans-serif";
+    return settings.fontFamily;
+  };
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-white dark:bg-slate-950">
-      <main className="flex flex-col items-center justify-center gap-12 px-6 max-w-2xl">
+    <div className="flex flex-col h-screen w-screen bg-white dark:bg-slate-950">
+      {settings && onSettingsClick && (
+        <Header onSettingsClick={onSettingsClick} hideBackButton />
+      )}
+      <div className="flex-1 flex items-center justify-center">
+        <main className="flex flex-col items-center justify-center gap-12 px-6 max-w-2xl">
         <div className="text-center mb-8">
           <h1
             className="text-5xl font-bold mb-4 text-blue-600"
-            style={{ fontFamily: "Verdana, Arial, Helvetica, sans-serif" }}
+            style={{ fontFamily: getFontFamily() }}
           >
             Make text friendlier
           </h1>
           <p
             className="text-2xl text-gray-700 dark:text-gray-300"
-            style={{ fontFamily: "Verdana, Arial, Helvetica, sans-serif" }}
+            style={{ fontFamily: getFontFamily() }}
           >
             Take a photo of some text to make it friendlier
           </p>
@@ -44,7 +58,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
             <CameraIcon className="w-24 h-24 mb-4 text-blue-600 transition-colors" />
             <span
               className="font-bold text-lg text-center text-blue-600 dark:text-blue-400"
-              style={{ fontFamily: "Verdana, Arial, Helvetica, sans-serif" }}
+              style={{ fontFamily: getFontFamily() }}
             >
               Take a photo
             </span>
@@ -61,7 +75,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
             <UploadIcon className="w-24 h-24 mb-4 text-blue-600 transition-colors" />
             <span
               className="font-bold text-lg text-center text-blue-600 dark:text-blue-400"
-              style={{ fontFamily: "Verdana, Arial, Helvetica, sans-serif" }}
+              style={{ fontFamily: getFontFamily() }}
             >
               Upload from device
             </span>
@@ -82,7 +96,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
             <Pencil2Icon className="w-6 h-6 text-blue-600 transition-colors" />
             <span
               className="font-semibold text-base text-blue-600 dark:text-blue-400"
-              style={{ fontFamily: "Verdana, Arial, Helvetica, sans-serif" }}
+              style={{ fontFamily: getFontFamily() }}
             >
               Write text instead
             </span>
@@ -99,13 +113,14 @@ export const UploadView: React.FC<UploadViewProps> = ({
           <ViewBox variant="error" className="w-full max-w-xl">
             <p
               className="text-lg text-red-700 dark:text-red-300"
-              style={{ fontFamily: "Verdana, Arial, Helvetica, sans-serif" }}
+              style={{ fontFamily: getFontFamily() }}
             >
               Error: {error}
             </p>
           </ViewBox>
         )}
       </main>
+      </div>
     </div>
   );
 };

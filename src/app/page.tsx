@@ -388,6 +388,8 @@ export default function Page() {
           setFormattedCache({ "0": "" });
           setViewMode("edit");
         }}
+        settings={settings}
+        onSettingsClick={() => setViewMode("settings")}
       />
     );
   }
