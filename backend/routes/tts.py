@@ -5,7 +5,6 @@ import tempfile
 import numpy as np
 from flask import request, jsonify, Blueprint, stream_with_context, current_app
 from services.tts_service import generate_speech
-from services.alignment_service import align_text_with_mfa
 from utils.audio_utils import audio_to_base64
 from config import TTS_SAMPLE_RATE
 
@@ -88,17 +87,13 @@ def text_to_speech():
                         tmp_audio_path = tmp_audio.name
                     
                     try:
-                        # Run alignment
-                        alignment_result = align_text_with_mfa(tmp_audio_path, text)
-                        timestamps = alignment_result.get('timestamps', [])
-                        
-                        yield f"data: {json.dumps({'status': 'aligning', 'progress': 100})}\n\n"
-                    finally:
                         # Clean up temporary audio file
                         try:
                             os.unlink(tmp_audio_path)
                         except:
                             pass
+                    finally:
+                        pass
                 except (BrokenPipeError, ConnectionResetError) as e:
                     print(f"Client disconnected during alignment: {str(e)}")
                     return

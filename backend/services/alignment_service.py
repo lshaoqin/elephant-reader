@@ -6,10 +6,9 @@ import uuid
 from typing import Dict
 from utils.text_utils import split_text_into_words, clean_text_for_alignment
 from utils.docker_utils import execute_in_container
-from config import MFA_CONTAINER_NAME, MFA_WORKDIR
 
 
-def align_text_with_mfa(audio_path: str, text: str, mfa_container: str = MFA_CONTAINER_NAME) -> Dict:
+def align_text_with_mfa(audio_path: str, text: str, mfa_container: str = "mfa_aligner") -> Dict:
     """Use Montreal Forced Aligner to align text with audio and get timestamps.
     
     Args:
@@ -29,7 +28,7 @@ def align_text_with_mfa(audio_path: str, text: str, mfa_container: str = MFA_CON
     """
     try:
         # Create working directories in shared volume
-        workdir = MFA_WORKDIR
+        workdir = "/mfa_workdir"
         os.makedirs(workdir, exist_ok=True)
         
         # Create unique subdirectories for this job

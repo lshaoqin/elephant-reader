@@ -14,10 +14,6 @@ GEMINI_MODEL = "gemini-2.5-flash-lite"
 TTS_LANG_CODE = 'b'
 TTS_SAMPLE_RATE = 24000
 
-# MFA Configuration
-MFA_CONTAINER_NAME = "mfa_aligner"
-MFA_WORKDIR = "/mfa_workdir"
-
 # Flask Configuration
 FLASK_DEBUG = False
 FLASK_HOST = '0.0.0.0'

@@ -1,16 +1,4 @@
 services:
-  mfa:
-    image: mmcauliffe/montreal-forced-aligner:latest
-    container_name: mfa_aligner
-    user: root
-    entrypoint: /bin/bash
-    command: -c "while true; do sleep 1; done"
-    volumes:
-      - mfa_data:/mfa
-      - mfa_workdir:/mfa_workdir
-    networks:
-      - backend_network
-
   flask-app:
     build:
       context: .
@@ -25,17 +13,10 @@ services:
     volumes:
       - .:/backend
       - ./credentials:/backend/credentials:ro
-      - mfa_workdir:/mfa_workdir
       - /var/run/docker.sock:/var/run/docker.sock
-    depends_on:
-      - mfa
     networks:
       - backend_network
     restart: unless-stopped
-
-volumes:
-  mfa_data:
-  mfa_workdir:
 
 networks:
   backend_network:
