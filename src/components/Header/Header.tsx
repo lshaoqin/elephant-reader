@@ -18,7 +18,7 @@ export const Header: React.FC<HeaderProps> = ({
   onSettingsClick,
   showBackButton = true,
   showSettings = true,
-  showProfile = true,
+  showProfile = false,
   title,
   borderColor = "yellow",
   position = "top",
