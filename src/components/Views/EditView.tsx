@@ -24,10 +24,14 @@ export const EditView: React.FC<EditViewProps> = ({
   const [selectedRange, setSelectedRange] = useState<{ start: number; end: number } | null>(null);
   const editorRef = useRef<HTMLDivElement>(null);
 
-  // Initialize editor with content
+  // Initialize editor with content and focus
   useEffect(() => {
     if (editorRef.current && !editorRef.current.innerHTML) {
       editorRef.current.innerHTML = initialText;
+    }
+    // Focus the editor to trigger mobile keyboard
+    if (editorRef.current) {
+      editorRef.current.focus();
     }
   }, [initialText]);
 
