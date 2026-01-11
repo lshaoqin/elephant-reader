@@ -251,10 +251,7 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
               }}
               style={{
                 backgroundColor: isCurrentWord ? "#fbbf24" : "transparent",
-                fontWeight: isCurrentWord ? "bold" : "normal",
                 opacity: isReadWord ? 0.5 : 1,
-                borderRadius: isCurrentWord ? "2px" : "0",
-                padding: isCurrentWord ? "0 2px" : "0",
                 transition: "all 0.15s ease-in-out",
                 cursor: "pointer",
               }}
