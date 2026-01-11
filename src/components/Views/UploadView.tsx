@@ -5,6 +5,7 @@ import {
   CameraIcon,
   UploadIcon,
   Pencil2Icon,
+  GearIcon,
 } from "@radix-ui/react-icons";
 import { LoadingSpinner, ViewBox, Header } from "@/components";
 import type { TextSettings } from "./SettingsView";
@@ -33,9 +34,6 @@ export const UploadView: React.FC<UploadViewProps> = ({
 
   return (
     <div className="flex flex-col h-screen w-screen bg-white dark:bg-slate-950">
-      {settings && onSettingsClick && (
-        <Header onSettingsClick={onSettingsClick} hideBackButton />
-      )}
       <div className="flex-1 flex items-center justify-center">
         <main className="flex flex-col items-center justify-center gap-12 px-6 max-w-2xl">
         <div className="text-center mb-8">
@@ -88,7 +86,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
           </label>
         </div>
 
-        <div className="flex flex-col items-center gap-2 w-full max-w-2xl">
+        <div className="flex flex-col items-center gap-4 w-full max-w-2xl">
           <button
             onClick={onWriteTextClick}
             className="flex flex-row items-center justify-center gap-3 px-8 py-4 border-2 border-blue-400 rounded-lg cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-950 transition-colors w-full max-w-md"
@@ -101,6 +99,20 @@ export const UploadView: React.FC<UploadViewProps> = ({
               Write text instead
             </span>
           </button>
+          {onSettingsClick && (
+            <button
+              onClick={onSettingsClick}
+              className="flex flex-row items-center justify-center gap-3 px-8 py-4 border-2 border-gray-400 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors w-full max-w-md"
+            >
+              <GearIcon className="w-6 h-6 text-gray-600 dark:text-gray-400 transition-colors" />
+              <span
+                className="font-semibold text-base text-gray-600 dark:text-gray-400"
+                style={{ fontFamily: getFontFamily() }}
+              >
+                Settings
+              </span>
+            </button>
+          )}
         </div>
         {loading && (
           <LoadingSpinner
