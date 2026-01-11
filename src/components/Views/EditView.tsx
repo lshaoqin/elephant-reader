@@ -43,7 +43,7 @@ export const EditView: React.FC<EditViewProps> = ({
 
   const updateSelectionRange = () => {
     const selection = window.getSelection();
-    if (selection && selection.toString()) {
+    if (selection && selection.toString().length > 0) {
       setSelectedRange({
         start: 0,
         end: selection.toString().length,
@@ -55,6 +55,8 @@ export const EditView: React.FC<EditViewProps> = ({
 
   const handleMouseUp = updateSelectionRange;
   const handleKeyUp = updateSelectionRange;
+  const handleSelect = updateSelectionRange;
+  const handleTouchEnd = updateSelectionRange;
 
   const handleBold = () => {
     document.execCommand("bold", false);
@@ -70,10 +72,31 @@ export const EditView: React.FC<EditViewProps> = ({
 
   return (
     <div 
-      className="flex flex-col h-screen w-screen"
+      className="flex flex-col h-dvh w-screen"
       style={{ backgroundColor: settings.backgroundColor }}
     >
-      <Header onBackClick={onBackClick} onSettingsClick={onSettingsClick} />
+      <div className="sm:border-b-4 sm:border-yellow-500">
+        <Header onBackClick={onBackClick} onSettingsClick={onSettingsClick} borderColor="none" />
+      </div>
+
+      {/* Formatting toolbar - at top on mobile */}
+      <div className="flex gap-4 p-6 bg-white dark:bg-slate-900 border-b-4 border-yellow-500 flex-wrap justify-center sm:hidden">
+        <Button
+          onClick={handleBold}
+          disabled={!selectedRange}
+          icon={
+            <span style={{ fontSize: "16px", fontWeight: "bold" }}>B</span>
+          }
+        >
+          Bold
+        </Button>
+        <Button
+          onClick={handleSave}
+          icon={<CheckIcon className="w-6 h-6" />}
+        >
+          Save
+        </Button>
+      </div>
 
       {/* Content area with editable TextViewBox */}
       <div className="flex-1 overflow-auto p-6 sm:p-8 lg:p-12 flex flex-col items-start justify-start">
@@ -95,6 +118,8 @@ export const EditView: React.FC<EditViewProps> = ({
             onInput={handleInputChange}
             onMouseUp={handleMouseUp}
             onKeyUp={handleKeyUp}
+            onSelect={handleSelect}
+            onTouchEnd={handleTouchEnd}
             className="focus:outline-none focus:ring-0"
             style={{
               whiteSpace: "pre-wrap",
@@ -105,8 +130,10 @@ export const EditView: React.FC<EditViewProps> = ({
         </TextViewBox>
       </div>
 
-      {/* Tablet-optimized footer with formatting buttons */}
-      <div className="flex gap-4 p-6 bg-white dark:bg-slate-900 border-t-4 border-yellow-500 flex-wrap justify-center">
+      {/* Formatting toolbar - at bottom on larger screens */}
+      <div 
+        className="hidden sm:flex gap-4 p-6 bg-white dark:bg-slate-900 border-t-4 border-yellow-500 flex-wrap justify-center transition-all duration-300"
+      >
         <Button
           onClick={handleBold}
           disabled={!selectedRange}

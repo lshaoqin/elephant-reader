@@ -28,16 +28,14 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const shouldShowBackButton = hideBackButton ? false : showBackButton;
   const borderClass = {
-    yellow: "border-yellow-500",
-    blue: "border-blue-500",
+    yellow: "border-b-4 border-yellow-500",
+    blue: "border-b-4 border-blue-500",
     none: "",
   };
 
-  const borderPosition = position === "top" ? "border-b-4" : "border-t-4";
-
   return (
     <div
-      className={`flex items-center p-6 bg-white dark:bg-slate-900 ${borderPosition} ${borderClass[borderColor]}`}
+      className={`flex items-center p-6 bg-white dark:bg-slate-900 ${borderClass[borderColor]}`}
     >
       {/* Left: Back Button or Spacer */}
       <div className="flex-1">
