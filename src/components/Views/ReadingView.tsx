@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef, ReactNode, useMemo, useCallback } from "react";
-import { StopIcon } from "@radix-ui/react-icons";
+import { StopIcon, PlayIcon } from "@radix-ui/react-icons";
 import { Header, Button, TextViewBox } from "@/components";
 import type { TextSettings } from "./SettingsView";
 
@@ -55,9 +55,14 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
   const [currentWordIndex, setCurrentWordIndex] = useState(0);
   const [recognizedText, setRecognizedText] = useState("");
   const [status, setStatus] = useState("Ready to read");
+  const [audioURL, setAudioURL] = useState<string | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const processedResultsRef = useRef<number>(0); // Track which results we've already processed
   const currentWordIndexRef = useRef<number>(0); // Ref to track current word index in callbacks
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Keep the ref in sync with state
   React.useEffect(() => {
@@ -94,6 +99,88 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
     }
   }, []);
 
+  // Cleanup audio URL and audio element on unmount
+  React.useEffect(() => {
+    return () => {
+      if (audioURL) {
+        URL.revokeObjectURL(audioURL);
+      }
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+    };
+  }, [audioURL]);
+
+  // Start audio recording
+  const startRecording = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        const url = URL.createObjectURL(audioBlob);
+        
+        // Revoke old URL if exists
+        if (audioURL) {
+          URL.revokeObjectURL(audioURL);
+        }
+        
+        setAudioURL(url);
+        
+        // Stop all tracks to release microphone
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      mediaRecorder.start();
+    } catch (error) {
+      console.error("Failed to start recording:", error);
+      setStatus("Failed to access microphone");
+    }
+  }, [audioURL]);
+
+  // Stop audio recording
+  const stopRecording = useCallback(() => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop();
+    }
+  }, []);
+
+  // Play recorded audio
+  const playRecording = useCallback(() => {
+    if (!audioURL) return;
+
+    if (audioRef.current) {
+      audioRef.current.pause();
+    }
+
+    const audio = new Audio(audioURL);
+    audioRef.current = audio;
+    
+    audio.onplay = () => setIsPlaying(true);
+    audio.onended = () => setIsPlaying(false);
+    audio.onpause = () => setIsPlaying(false);
+    
+    audio.play();
+  }, [audioURL]);
+
+  // Stop playing recorded audio
+  const stopPlayback = useCallback(() => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+    setIsPlaying(false);
+  }, []);
+
   // Find matching words from speech in the text, starting from current position
   const findMatchingWords = useCallback((spokenWords: string[], startIndex: number): number => {
     let matchedCount = 0;
@@ -127,6 +214,9 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
     return matchedCount;
   }, [words]);
 
+  // Ref to track if we should auto-stop (to avoid stopping multiple times)
+  const shouldAutoStopRef = useRef<boolean>(false);
+
   const handleRecognitionResult = useCallback((event: SpeechRecognitionEvent) => {
     const results = event.results;
     
@@ -145,6 +235,24 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
           const newIndex = Math.min(currentIdx + matchedCount, words.length - 1);
           setCurrentWordIndex(newIndex);
           setStatus(`Recognized ${matchedCount} word(s). Now at word ${newIndex + 1}`);
+          
+          // Auto-stop when the last word is reached
+          if (newIndex >= words.length - 1 && !shouldAutoStopRef.current) {
+            shouldAutoStopRef.current = true;
+            setStatus("Finished reading! Stopping...");
+            // Use setTimeout to allow state updates to complete
+            setTimeout(() => {
+              setIsListening(false);
+              if (recognitionRef.current) {
+                recognitionRef.current.onend = null;
+                recognitionRef.current.stop();
+              }
+              if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+                mediaRecorderRef.current.stop();
+              }
+              setStatus("Finished reading! Recording saved.");
+            }, 500);
+          }
         }
         
         setRecognizedText(transcript);
@@ -169,6 +277,18 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
     setRecognizedText("");
     setStatus("Listening...");
     setIsListening(true);
+    
+    // Clear previous recording and start new one
+    if (audioRef.current) {
+      audioRef.current.pause();
+    }
+    if (audioURL) {
+      URL.revokeObjectURL(audioURL);
+    }
+    setAudioURL(null);
+    setIsPlaying(false);
+    shouldAutoStopRef.current = false;
+    startRecording();
 
     recognitionRef.current.onstart = () => {
       setStatus("Listening... Start reading!");
@@ -205,7 +325,7 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
       setIsListening(false);
       console.error(error);
     }
-  }, [handleRecognitionResult, isListening]);
+  }, [handleRecognitionResult, isListening, audioURL, startRecording]);
 
   const stopListening = useCallback(() => {
     setIsListening(false);
@@ -213,8 +333,9 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
       recognitionRef.current.onend = null; // Prevent auto-restart
       recognitionRef.current.stop();
     }
-    setStatus("Stopped");
-  }, []);
+    stopRecording();
+    setStatus("Stopped - Recording saved!");
+  }, [stopRecording]);
 
   // Highlight current word in the text - using consistent word splitting
   const renderTextWithHighlight = useCallback((): ReactNode => {
@@ -239,8 +360,10 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
           const thisWordIndex = wordIndex;
           wordIndex++;
           
-          const isCurrentWord = thisWordIndex === currentWordIndex;
-          const isReadWord = thisWordIndex < currentWordIndex;
+          // Check if reading is complete (at the last word and not listening)
+          const isReadingComplete = currentWordIndex >= words.length - 1 && !isListening;
+          const isCurrentWord = !isReadingComplete && thisWordIndex === currentWordIndex;
+          const isReadWord = !isReadingComplete && thisWordIndex < currentWordIndex;
 
           return (
             <span
@@ -262,7 +385,7 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
         })}
       </>
     );
-  }, [plainText, currentWordIndex]);
+  }, [plainText, currentWordIndex, words.length, isListening]);
 
   return (
     <div
@@ -300,29 +423,52 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
       {/* Control buttons */}
       <div className="flex gap-4 p-6 bg-white dark:bg-slate-900 border-t-4 border-blue-500 flex-wrap justify-center">
         {!isListening ? (
-          <Button
-            onClick={startListening}
-            icon={
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M12 1a3 3 0 0 0-3 3v12a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
-                <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
-                <line x1="12" y1="19" x2="12" y2="23"></line>
-                <line x1="8" y1="23" x2="16" y2="23"></line>
-              </svg>
-            }
-          >
-            Start Reading
-          </Button>
+          <>
+            <Button
+              onClick={startListening}
+              icon={
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M12 1a3 3 0 0 0-3 3v12a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                  <line x1="12" y1="19" x2="12" y2="23"></line>
+                  <line x1="8" y1="23" x2="16" y2="23"></line>
+                </svg>
+              }
+            >
+              Start Reading
+            </Button>
+            
+            {/* Playback controls - show when there's a recording */}
+            {audioURL && (
+              <>
+                {!isPlaying ? (
+                  <Button
+                    onClick={playRecording}
+                    icon={<PlayIcon className="w-6 h-6" />}
+                  >
+                    Play Recording
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={stopPlayback}
+                    icon={<StopIcon className="w-6 h-6" />}
+                  >
+                    Stop Playback
+                  </Button>
+                )}
+              </>
+            )}
+          </>
         ) : (
           <>
             <Button
