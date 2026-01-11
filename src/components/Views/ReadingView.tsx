@@ -60,14 +60,19 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const processedResultsRef = useRef<number>(0); // Track which results we've already processed
   const currentWordIndexRef = useRef<number>(0); // Ref to track current word index in callbacks
+  const isListeningRef = useRef<boolean>(false); // Ref to track listening state in callbacks
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Keep the ref in sync with state
+  // Keep the refs in sync with state
   React.useEffect(() => {
     currentWordIndexRef.current = currentWordIndex;
   }, [currentWordIndex]);
+
+  React.useEffect(() => {
+    isListeningRef.current = isListening;
+  }, [isListening]);
 
   // Extract plain text and word list (memoized for consistency)
   const { plainText, words } = useMemo(() => {
@@ -243,9 +248,16 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
             // Use setTimeout to allow state updates to complete
             setTimeout(() => {
               setIsListening(false);
+              isListeningRef.current = false;
               if (recognitionRef.current) {
                 recognitionRef.current.onend = null;
-                recognitionRef.current.stop();
+                recognitionRef.current.onerror = null;
+                recognitionRef.current.onresult = null;
+                try {
+                  recognitionRef.current.stop();
+                } catch {
+                  // Ignore errors when stopping
+                }
               }
               if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
                 mediaRecorderRef.current.stop();
@@ -265,10 +277,32 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
   }, [findMatchingWords, words.length]);
 
   const startListening = useCallback(() => {
-    if (!recognitionRef.current) {
-      setStatus("Speech Recognition not available");
+    // Create a fresh recognition instance each time to avoid state issues
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    
+    if (!SpeechRecognition) {
+      setStatus("Speech Recognition not supported in this browser");
       return;
     }
+
+    // Stop any existing recognition
+    if (recognitionRef.current) {
+      recognitionRef.current.onend = null;
+      recognitionRef.current.onerror = null;
+      recognitionRef.current.onresult = null;
+      try {
+        recognitionRef.current.abort();
+      } catch {
+        // Ignore errors when aborting
+      }
+    }
+
+    // Create new recognition instance
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.language = "en-US";
+    recognitionRef.current = recognition;
 
     // Reset state
     setCurrentWordIndex(0);
@@ -277,6 +311,7 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
     setRecognizedText("");
     setStatus("Listening...");
     setIsListening(true);
+    isListeningRef.current = true;
     
     // Clear previous recording and start new one
     if (audioRef.current) {
@@ -290,28 +325,31 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
     shouldAutoStopRef.current = false;
     startRecording();
 
-    recognitionRef.current.onstart = () => {
+    recognition.onstart = () => {
       setStatus("Listening... Start reading!");
     };
 
-    recognitionRef.current.onresult = handleRecognitionResult;
+    recognition.onresult = handleRecognitionResult;
 
-    recognitionRef.current.onerror = (event: SpeechRecognitionErrorEvent) => {
+    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
       setStatus(`Error: ${event.error}`);
       if (event.error !== 'no-speech') {
         setIsListening(false);
+        isListeningRef.current = false;
       }
     };
 
-    recognitionRef.current.onend = () => {
+    recognition.onend = () => {
       // Auto-restart if still supposed to be listening (browser may stop after silence)
-      if (isListening) {
+      // Use ref to get current value, not stale closure value
+      if (isListeningRef.current) {
         setStatus("Restarting...");
         try {
-          recognitionRef.current?.start();
+          recognition.start();
         } catch {
           setStatus("Stopped");
           setIsListening(false);
+          isListeningRef.current = false;
         }
       } else {
         setStatus("Stopped");
@@ -319,19 +357,27 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
     };
 
     try {
-      recognitionRef.current.start();
+      recognition.start();
     } catch (error) {
       setStatus("Failed to start recognition");
       setIsListening(false);
+      isListeningRef.current = false;
       console.error(error);
     }
-  }, [handleRecognitionResult, isListening, audioURL, startRecording]);
+  }, [handleRecognitionResult, audioURL, startRecording]);
 
   const stopListening = useCallback(() => {
     setIsListening(false);
+    isListeningRef.current = false;
     if (recognitionRef.current) {
       recognitionRef.current.onend = null; // Prevent auto-restart
-      recognitionRef.current.stop();
+      recognitionRef.current.onerror = null;
+      recognitionRef.current.onresult = null;
+      try {
+        recognitionRef.current.stop();
+      } catch {
+        // Ignore errors when stopping
+      }
     }
     stopRecording();
     setStatus("Stopped - Recording saved!");
