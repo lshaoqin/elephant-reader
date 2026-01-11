@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Header, GradientReader } from "@/components";
 
 export interface TextSettings {
@@ -17,15 +17,46 @@ interface SettingsViewProps {
   onBackClick: () => void;
 }
 
-const FONT_FAMILIES = [
-  { name: "Geist", value: "var(--font-geist-sans), sans-serif" },
-  { name: "Verdana", value: "Verdana, sans-serif" },
-  { name: "Arial", value: "Arial, sans-serif" },
-  { name: "Helvetica", value: "Helvetica, sans-serif" },
-  { name: "Tahoma", value: "Tahoma, sans-serif" },
-  { name: "Trebuchet MS", value: "Trebuchet MS, sans-serif" },
-  { name: "Segoe UI", value: "Segoe UI, sans-serif" },
+interface FontOption {
+  name: string;
+  value: string;
+  checkFont?: string; // The actual font name to check for availability
+}
+
+const ALL_FONTS: FontOption[] = [
+  { name: "Geist", value: "var(--font-geist-sans), sans-serif", checkFont: "Geist" },
+  { name: "Verdana", value: "Verdana, sans-serif", checkFont: "Verdana" },
+  { name: "Arial", value: "Arial, sans-serif", checkFont: "Arial" },
+  { name: "Tahoma", value: "Tahoma, sans-serif", checkFont: "Tahoma" },
+  { name: "Trebuchet MS", value: "Trebuchet MS, sans-serif", checkFont: "Trebuchet MS" },
+  { name: "Segoe UI", value: "Segoe UI, sans-serif", checkFont: "Segoe UI" },
 ];
+
+// Function to check if a font is available
+const checkFontAvailability = (fontName: string): boolean => {
+  if (typeof document === "undefined") return true; // SSR fallback
+  
+  // Use a test string with unique width characteristics
+  const testString = "mmmmmmmmmmlli";
+  const fontSize = "72px";
+  
+  // Create a canvas to measure text width
+  const canvas = document.createElement("canvas");
+  const context = canvas.getContext("2d");
+  
+  if (!context) return true; // Fallback if canvas not supported
+  
+  // Measure with a baseline font
+  context.font = `${fontSize} monospace`;
+  const baselineWidth = context.measureText(testString).width;
+  
+  // Measure with the test font
+  context.font = `${fontSize} "${fontName}", monospace`;
+  const testWidth = context.measureText(testString).width;
+  
+  // If widths differ, the font is available
+  return baselineWidth !== testWidth;
+};
 
 const FONT_SIZES = [14, 16, 18, 20, 22, 24, 28, 32];
 
@@ -53,6 +84,21 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onSettingsChange,
   onBackClick,
 }) => {
+  const [availableFonts, setAvailableFonts] = useState<FontOption[]>(ALL_FONTS);
+
+  // Check font availability on mount
+  useEffect(() => {
+    const checkFonts = async () => {
+      const available = ALL_FONTS.filter((font) => {
+        if (!font.checkFont) return true; // Keep fonts without check requirement
+        return checkFontAvailability(font.checkFont);
+      });
+      setAvailableFonts(available);
+    };
+
+    checkFonts();
+  }, []);
+
   // Helper to get display color (gradient mode defaults to black for labels)
   const getDisplayColor = () => settings.fontColor === "gradient" ? "#1a1a1a" : settings.fontColor;
 
@@ -117,7 +163,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               Font Type
             </label>
             <div className="grid grid-cols-2 gap-3">
-              {FONT_FAMILIES.map((font) => (
+              {availableFonts.map((font) => (
                 <button
                   key={font.value}
                   onClick={() => handleFontChange(font.value)}
