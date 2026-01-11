@@ -12,7 +12,7 @@ export async function POST(req: Request) {
     }
 
     // Forward the request to the Python backend
-    const backendUrl = process.env.PYTHON_BACKEND_URL || "http://localhost:5000";
+    const backendUrl = process.env.PYTHON_BACKEND_URL || "http://localhost:8080";
 
     const response = await fetch(`${backendUrl}/format-text`, {
       method: "POST",

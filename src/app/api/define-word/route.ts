@@ -9,7 +9,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No word provided" }, { status: 400 });
     }
 
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
+    const backendUrl = process.env.PYTHON_BACKEND_URL || "http://localhost:8080";
     const response = await fetch(`${backendUrl}/define-word`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
