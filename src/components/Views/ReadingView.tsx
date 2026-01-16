@@ -45,6 +45,20 @@ const normalizeWord = (word: string): string => {
   return word.toLowerCase().replace(/[^\w']/g, "");
 };
 
+// Detect iOS devices for speech recognition workarounds
+const isIOS = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+};
+
+// Detect mobile devices
+const isMobile = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+};
+
 export const ReadingView: React.FC<ReadingViewProps> = ({
   displayText,
   onBackClick,
@@ -64,6 +78,9 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const restartTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [isMobileDevice] = useState(() => isMobile());
+  const [isIOSDevice] = useState(() => isIOS());
 
   // Keep the refs in sync with state
   React.useEffect(() => {
@@ -299,10 +316,18 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
 
     // Create new recognition instance
     const recognition = new SpeechRecognition();
-    recognition.continuous = true;
+    // iOS Safari has issues with continuous mode - use non-continuous and restart manually
+    // Android Chrome works fine with continuous mode
+    recognition.continuous = !isIOSDevice;
     recognition.interimResults = true;
     recognition.language = "en-US";
     recognitionRef.current = recognition;
+    
+    // Clear any pending restart timeout
+    if (restartTimeoutRef.current) {
+      clearTimeout(restartTimeoutRef.current);
+      restartTimeoutRef.current = null;
+    }
 
     // Reset state
     setCurrentWordIndex(0);
@@ -332,27 +357,93 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
     recognition.onresult = handleRecognitionResult;
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-      setStatus(`Error: ${event.error}`);
-      if (event.error !== 'no-speech') {
-        setIsListening(false);
-        isListeningRef.current = false;
+      console.log('Speech recognition error:', event.error);
+      
+      // Handle different error types
+      switch (event.error) {
+        case 'no-speech':
+          // No speech detected - restart on mobile since it stops more frequently
+          if (isMobileDevice && isListeningRef.current) {
+            setStatus("No speech detected, still listening...");
+            // Don't restart immediately, let onend handle it
+          }
+          break;
+        case 'aborted':
+          // User or system aborted - try to restart if still listening
+          if (isListeningRef.current) {
+            setStatus("Restarting...");
+          }
+          break;
+        case 'audio-capture':
+          setStatus("Microphone error - please check permissions");
+          setIsListening(false);
+          isListeningRef.current = false;
+          break;
+        case 'not-allowed':
+          setStatus("Microphone access denied");
+          setIsListening(false);
+          isListeningRef.current = false;
+          break;
+        case 'network':
+          setStatus("Network error - check your connection");
+          // Try to restart after network error on mobile
+          if (isMobileDevice && isListeningRef.current) {
+            restartTimeoutRef.current = setTimeout(() => {
+              if (isListeningRef.current && recognitionRef.current) {
+                try {
+                  recognitionRef.current.start();
+                } catch {
+                  // Ignore
+                }
+              }
+            }, 1000);
+          }
+          break;
+        default:
+          setStatus(`Error: ${event.error}`);
+          if (!isMobileDevice) {
+            setIsListening(false);
+            isListeningRef.current = false;
+          }
       }
     };
 
     recognition.onend = () => {
       // Auto-restart if still supposed to be listening (browser may stop after silence)
       // Use ref to get current value, not stale closure value
-      if (isListeningRef.current) {
-        setStatus("Restarting...");
-        try {
-          recognition.start();
-        } catch {
-          setStatus("Stopped");
-          setIsListening(false);
-          isListeningRef.current = false;
-        }
+      if (isListeningRef.current && !shouldAutoStopRef.current) {
+        // Add a small delay before restarting on mobile to avoid rapid restart loops
+        const restartDelay = isMobileDevice ? 100 : 0;
+        
+        restartTimeoutRef.current = setTimeout(() => {
+          if (isListeningRef.current && !shouldAutoStopRef.current) {
+            setStatus("Listening... Continue reading!");
+            try {
+              // Create a new recognition instance for mobile to avoid stale state issues
+              if (isMobileDevice) {
+                const newRecognition = new SpeechRecognition();
+                newRecognition.continuous = !isIOSDevice;
+                newRecognition.interimResults = true;
+                newRecognition.language = "en-US";
+                newRecognition.onstart = recognition.onstart;
+                newRecognition.onresult = recognition.onresult;
+                newRecognition.onerror = recognition.onerror;
+                newRecognition.onend = recognition.onend;
+                recognitionRef.current = newRecognition;
+                newRecognition.start();
+              } else {
+                recognition.start();
+              }
+            } catch (e) {
+              console.error('Failed to restart recognition:', e);
+              setStatus("Tap to restart listening");
+              setIsListening(false);
+              isListeningRef.current = false;
+            }
+          }
+        }, restartDelay);
       } else {
-        setStatus("Stopped");
+        setStatus(audioURL ? "Stopped - Recording saved!" : "Stopped");
       }
     };
 
@@ -364,11 +455,18 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
       isListeningRef.current = false;
       console.error(error);
     }
-  }, [handleRecognitionResult, audioURL, startRecording]);
+  }, [handleRecognitionResult, audioURL, startRecording, isMobileDevice, isIOSDevice]);
 
   const stopListening = useCallback(() => {
     setIsListening(false);
     isListeningRef.current = false;
+    
+    // Clear any pending restart timeout
+    if (restartTimeoutRef.current) {
+      clearTimeout(restartTimeoutRef.current);
+      restartTimeoutRef.current = null;
+    }
+    
     if (recognitionRef.current) {
       recognitionRef.current.onend = null; // Prevent auto-restart
       recognitionRef.current.onerror = null;
