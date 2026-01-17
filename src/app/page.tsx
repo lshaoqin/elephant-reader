@@ -94,6 +94,7 @@ export default function Page() {
   const [results, setResults] = useState<ExtractionResult[]>([]);
   const [currentPageIndex, setCurrentPageIndex] = useState<number>(0);
   const [loading, setLoading] = useState(false);
+  const [loadingFileCount, setLoadingFileCount] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
   const [selectedBlockIndex, setSelectedBlockIndex] = useState<number | null>(
     null
@@ -131,7 +132,14 @@ export default function Page() {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
+    // Enforce maximum of 20 files
+    if (files.length > 20) {
+      setError("You can only upload up to 20 images at once");
+      return;
+    }
+
     setLoading(true);
+    setLoadingFileCount(files.length);
     setError(null);
     setResults([]);
     setCurrentPageIndex(0);
@@ -139,11 +147,44 @@ export default function Page() {
     setViewMode("upload");
 
     try {
-      const allResults: ExtractionResult[] = [];
-      
-      // Process each file
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
+      // Use batch processing for multiple files
+      if (files.length > 1) {
+        const formData = new FormData();
+        
+        // Append all files
+        for (let i = 0; i < files.length; i++) {
+          formData.append("files", files[i]);
+        }
+
+        const res = await fetch("/api/extract-batch", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!res.ok) {
+          const errorData = await res.json();
+          throw new Error(errorData.error || res.statusText);
+        }
+
+        const data = await res.json();
+        
+        if (data.error) throw new Error(data.error);
+        
+        if (data.results && data.results.length > 0) {
+          setResults(data.results);
+          setCurrentPageIndex(0);
+          
+          // Show warning if there were any errors
+          if (data.errors && data.errors.length > 0) {
+            console.warn("Some files failed to process:", data.errors);
+            setError(`Processed ${data.total} of ${files.length} images. ${data.errors.length} failed.`);
+          }
+        } else {
+          throw new Error("No results returned from batch processing");
+        }
+      } else {
+        // Single file - use regular endpoint
+        const file = files[0];
         const form = new FormData();
         form.append("file", file);
 
@@ -159,11 +200,10 @@ export default function Page() {
 
         const data = await res.json();
         if (data.error) throw new Error(data.error);
-        allResults.push(data);
+        setResults([data]);
+        setCurrentPageIndex(0);
       }
       
-      setResults(allResults);
-      setCurrentPageIndex(0);
       // Clear audio cache when uploading new files
       setCachedAudioUrl(null);
       setCachedAudioKey(null);
@@ -173,6 +213,7 @@ export default function Page() {
       setError(msg);
     } finally {
       setLoading(false);
+      setLoadingFileCount(0);
     }
   }
 
@@ -391,6 +432,7 @@ export default function Page() {
         loading={loading}
         error={error}
         onFileChange={handleFileChange}
+        loadingFileCount={loadingFileCount}
         onWriteTextClick={() => {
           // Set up a minimal result structure to enable EditView
           setResults([{

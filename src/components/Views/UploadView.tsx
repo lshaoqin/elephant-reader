@@ -17,6 +17,7 @@ interface UploadViewProps {
   onWriteTextClick: () => void;
   settings?: TextSettings;
   onSettingsClick?: () => void;
+  loadingFileCount?: number;
 }
 
 export const UploadView: React.FC<UploadViewProps> = ({
@@ -26,6 +27,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
   onWriteTextClick,
   settings,
   onSettingsClick,
+  loadingFileCount = 0,
 }) => {
   const getFontFamily = () => {
     if (!settings) return "var(--font-geist-sans), sans-serif";
@@ -49,6 +51,12 @@ export const UploadView: React.FC<UploadViewProps> = ({
           >
             Take a photo of some text to make it friendlier
           </p>
+          <p
+            className="text-sm md:text-base text-gray-500 dark:text-gray-400 mt-2"
+            style={{ fontFamily: getFontFamily() }}
+          >
+            You can upload up to 20 images at once
+          </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8 w-full max-w-2xl">
@@ -67,6 +75,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
               multiple
               onChange={onFileChange}
               className="hidden"
+              max="20"
             />
           </label>
 
@@ -84,6 +93,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
               multiple
               onChange={onFileChange}
               className="hidden"
+              max="20"
             />
           </label>
         </div>
@@ -118,7 +128,9 @@ export const UploadView: React.FC<UploadViewProps> = ({
         </div>
         {loading && (
           <LoadingSpinner
-            label="Extracting and formatting text…"
+            label={loadingFileCount > 1 
+              ? `Processing ${loadingFileCount} images…` 
+              : "Extracting and formatting text…"}
             size="md"
             color="blue"
           />
