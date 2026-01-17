@@ -91,7 +91,8 @@ function saveSettingsToCookie(settings: TextSettings) {
 }
 
 export default function Page() {
-  const [result, setResult] = useState<ExtractionResult | null>(null);
+  const [results, setResults] = useState<ExtractionResult[]>([]);
+  const [currentPageIndex, setCurrentPageIndex] = useState<number>(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedBlockIndex, setSelectedBlockIndex] = useState<number | null>(
@@ -111,6 +112,9 @@ export default function Page() {
   const [previousViewMode, setPreviousViewMode] = useState<ViewMode>("upload");
   const audioRef = React.useRef<HTMLAudioElement>(null!);
   const ttsAbortControllerRef = React.useRef<AbortController | null>(null);
+  
+  // Get current result based on page index
+  const result = results[currentPageIndex] || null;
 
   // Load settings from cookie on mount
   useEffect(() => {
@@ -124,33 +128,43 @@ export default function Page() {
   }, [settings]);
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
 
     setLoading(true);
     setError(null);
-    setResult(null);
+    setResults([]);
+    setCurrentPageIndex(0);
     setSelectedBlockIndex(null);
     setViewMode("upload");
 
     try {
-      const form = new FormData();
-      form.append("file", file);
+      const allResults: ExtractionResult[] = [];
+      
+      // Process each file
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const form = new FormData();
+        form.append("file", file);
 
-      const res = await fetch("/api/extract", {
-        method: "POST",
-        body: form,
-      });
+        const res = await fetch("/api/extract", {
+          method: "POST",
+          body: form,
+        });
 
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || res.statusText);
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(text || res.statusText);
+        }
+
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        allResults.push(data);
       }
-
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
-      setResult(data);
-      // Clear audio cache when uploading new file
+      
+      setResults(allResults);
+      setCurrentPageIndex(0);
+      // Clear audio cache when uploading new files
       setCachedAudioUrl(null);
       setCachedAudioKey(null);
       setViewMode("image");
@@ -176,7 +190,7 @@ export default function Page() {
   const formatBlockText = async (blockIndex: number) => {
     if (!result) return;
     
-    const cacheKey = `block-${blockIndex}`;
+    const cacheKey = `page-${currentPageIndex}-block-${blockIndex}`;
     
     // Check if already formatted
     if (formattedCache[cacheKey]) {
@@ -227,9 +241,9 @@ export default function Page() {
   };
 
   const handleListen = async () => {
-    const audioCacheKey = selectedBlockIndex !== null ? `block-${selectedBlockIndex}` : "full-text";
+    const audioCacheKey = selectedBlockIndex !== null ? `page-${currentPageIndex}-block-${selectedBlockIndex}` : `page-${currentPageIndex}-full-text`;
     const displayText = selectedBlockIndex !== null 
-      ? formattedCache[`block-${selectedBlockIndex}`] || result?.blocks[selectedBlockIndex]?.text 
+      ? formattedCache[`page-${currentPageIndex}-block-${selectedBlockIndex}`] || result?.blocks[selectedBlockIndex]?.text 
       : result?.full_text;
 
     if (!displayText) {
@@ -379,13 +393,14 @@ export default function Page() {
         onFileChange={handleFileChange}
         onWriteTextClick={() => {
           // Set up a minimal result structure to enable EditView
-          setResult({
+          setResults([{
             blocks: [{ text: "", vertices: [] }],
             full_text: "",
             image_base64: "",
-          });
+          }]);
+          setCurrentPageIndex(0);
           setSelectedBlockIndex(0);
-          setFormattedCache({ "0": "" });
+          setFormattedCache({ "page-0-0": "" });
           setViewMode("edit");
         }}
         settings={settings}
@@ -403,6 +418,22 @@ export default function Page() {
         selectedBlockIndex={selectedBlockIndex}
         formattingBlockIndex={formattingBlockIndex}
         settings={settings}
+        currentPage={currentPageIndex + 1}
+        totalPages={results.length}
+        onNextPage={() => {
+          if (currentPageIndex < results.length - 1) {
+            setCurrentPageIndex(currentPageIndex + 1);
+            setSelectedBlockIndex(null);
+            setImageScale({ width: 0, height: 0 });
+          }
+        }}
+        onPrevPage={() => {
+          if (currentPageIndex > 0) {
+            setCurrentPageIndex(currentPageIndex - 1);
+            setSelectedBlockIndex(null);
+            setImageScale({ width: 0, height: 0 });
+          }
+        }}
         onBackClick={() => {
           // Warn user before losing document
           const confirmed = window.confirm(
@@ -432,7 +463,7 @@ export default function Page() {
 
   // Text View
   if (viewMode === "text" && result) {
-    const cacheKey = selectedBlockIndex !== null ? `block-${selectedBlockIndex}` : null;
+    const cacheKey = selectedBlockIndex !== null ? `page-${currentPageIndex}-block-${selectedBlockIndex}` : null;
     const displayText = selectedBlockIndex !== null 
       ? formattedCache[cacheKey!] || result.blocks[selectedBlockIndex]?.text 
       : result.full_text;
@@ -516,7 +547,7 @@ export default function Page() {
 
   // Edit View
   if (viewMode === "edit" && result) {
-    const cacheKey = selectedBlockIndex !== null ? `block-${selectedBlockIndex}` : null;
+    const cacheKey = selectedBlockIndex !== null ? `page-${currentPageIndex}-block-${selectedBlockIndex}` : null;
     const displayText = selectedBlockIndex !== null 
       ? formattedCache[cacheKey!] || result.blocks[selectedBlockIndex]?.text 
       : result.full_text;
@@ -526,16 +557,18 @@ export default function Page() {
       if (selectedBlockIndex !== null) {
         setFormattedCache((prev) => ({
           ...prev,
-          [`block-${selectedBlockIndex}`]: editedText,
+          [`page-${currentPageIndex}-block-${selectedBlockIndex}`]: editedText,
         }));
       } else {
         // For full text, we need to update the result's full_text
-        setResult((prev) => {
-          if (!prev) return prev;
-          return {
-            ...prev,
+        setResults((prev) => {
+          if (!prev || prev.length === 0) return prev;
+          const updated = [...prev];
+          updated[currentPageIndex] = {
+            ...updated[currentPageIndex],
             full_text: editedText,
           };
+          return updated;
         });
       }
       // Go back to text view
@@ -558,7 +591,7 @@ export default function Page() {
 
   // Reading View
   if (viewMode === "reading" && result) {
-    const cacheKey = selectedBlockIndex !== null ? `block-${selectedBlockIndex}` : null;
+    const cacheKey = selectedBlockIndex !== null ? `page-${currentPageIndex}-block-${selectedBlockIndex}` : null;
     const displayText = selectedBlockIndex !== null 
       ? formattedCache[cacheKey!] || result.blocks[selectedBlockIndex]?.text 
       : result.full_text;

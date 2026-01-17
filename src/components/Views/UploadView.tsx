@@ -7,7 +7,7 @@ import {
   Pencil2Icon,
   GearIcon,
 } from "@radix-ui/react-icons";
-import { LoadingSpinner, ViewBox, Header } from "@/components";
+import { LoadingSpinner, ViewBox } from "@/components";
 import type { TextSettings } from "./SettingsView";
 
 interface UploadViewProps {
@@ -64,6 +64,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
               type="file"
               accept="image/*"
               capture="environment"
+              multiple
               onChange={onFileChange}
               className="hidden"
             />
@@ -80,6 +81,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
             <input
               type="file"
               accept="image/*"
+              multiple
               onChange={onFileChange}
               className="hidden"
             />

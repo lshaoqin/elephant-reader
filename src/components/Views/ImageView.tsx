@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect } from "react";
 import { Header, LoadingSpinner } from "@/components";
 import type { TextSettings } from "./SettingsView";
 
@@ -32,6 +32,10 @@ interface ImageViewProps {
   onImageLoad: (e: React.SyntheticEvent<HTMLImageElement>) => void;
   onBlockClick: (blockIndex: number) => void;
   settings: TextSettings;
+  currentPage?: number;
+  totalPages?: number;
+  onNextPage?: () => void;
+  onPrevPage?: () => void;
 }
 
 export const ImageView: React.FC<ImageViewProps> = ({
@@ -44,7 +48,30 @@ export const ImageView: React.FC<ImageViewProps> = ({
   onImageLoad,
   onBlockClick,
   settings,
+  currentPage = 1,
+  totalPages = 1,
+  onNextPage,
+  onPrevPage,
 }) => {
+  // Add keyboard navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Only handle arrow keys if we have multiple pages
+      if (totalPages <= 1) return;
+      
+      if (e.key === 'ArrowLeft' && currentPage > 1 && onPrevPage) {
+        e.preventDefault();
+        onPrevPage();
+      } else if (e.key === 'ArrowRight' && currentPage < totalPages && onNextPage) {
+        e.preventDefault();
+        onNextPage();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [currentPage, totalPages, onNextPage, onPrevPage]);
+
   const renderBoundingBoxes = () => {
     if (!result || !imageScale.width || !imageScale.naturalWidth) return null;
 
@@ -128,6 +155,27 @@ export const ImageView: React.FC<ImageViewProps> = ({
 
       {/* Footer */}
       <div className="p-6 bg-white dark:bg-slate-900 border-t-4 border-yellow-500">
+        {totalPages > 1 && (
+          <div className="flex items-center justify-center gap-4 mb-4">
+            <button
+              onClick={onPrevPage}
+              disabled={currentPage === 1}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-700 transition-colors font-semibold"
+            >
+              ← Previous
+            </button>
+            <span className="text-lg font-semibold text-gray-700 dark:text-gray-300">
+              Page {currentPage} of {totalPages}
+            </span>
+            <button
+              onClick={onNextPage}
+              disabled={currentPage === totalPages}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-700 transition-colors font-semibold"
+            >
+              Next →
+            </button>
+          </div>
+        )}
         <p
           className="text-base text-gray-600 dark:text-gray-400 text-center font-semibold"
           style={{ fontFamily: "Verdana, Arial, Helvetica, sans-serif" }}
