@@ -52,6 +52,12 @@ const isIOS = (): boolean => {
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 };
 
+// Detect Android devices
+const isAndroid = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  return /Android/i.test(navigator.userAgent);
+};
+
 // Detect mobile devices
 const isMobile = (): boolean => {
   if (typeof window === 'undefined') return false;
@@ -79,8 +85,10 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
   const audioChunksRef = useRef<Blob[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const restartTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
   const [isMobileDevice] = useState(() => isMobile());
   const [isIOSDevice] = useState(() => isIOS());
+  const [isAndroidDevice] = useState(() => isAndroid());
 
   // Keep the refs in sync with state
   React.useEffect(() => {
@@ -133,11 +141,39 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
     };
   }, [audioURL]);
 
-  // Start audio recording
-  const startRecording = useCallback(async () => {
+  // Start audio recording - returns the stream for use with speech recognition
+  // Note: Recording is disabled on Android to avoid conflicts with speech recognition
+  const startRecording = useCallback(async (): Promise<MediaStream | null> => {
     try {
+      // Stop any existing stream first
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach(track => track.stop());
+      }
+      
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
+      mediaStreamRef.current = stream;
+      
+      // Skip recording on Android - only request permission
+      if (isAndroid()) {
+        console.log('Android detected - skipping audio recording to allow speech recognition');
+        return stream;
+      }
+      
+      // Check for supported MIME types on mobile
+      let mimeType = 'audio/webm';
+      if (typeof MediaRecorder !== 'undefined') {
+        if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+          mimeType = 'audio/webm;codecs=opus';
+        } else if (MediaRecorder.isTypeSupported('audio/webm')) {
+          mimeType = 'audio/webm';
+        } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+          mimeType = 'audio/mp4';
+        } else if (MediaRecorder.isTypeSupported('audio/ogg')) {
+          mimeType = 'audio/ogg';
+        }
+      }
+      
+      const mediaRecorder = new MediaRecorder(stream, { mimeType });
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
 
@@ -148,7 +184,7 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
       };
 
       mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
         const url = URL.createObjectURL(audioBlob);
         
         // Revoke old URL if exists
@@ -159,13 +195,18 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
         setAudioURL(url);
         
         // Stop all tracks to release microphone
-        stream.getTracks().forEach(track => track.stop());
+        if (mediaStreamRef.current) {
+          mediaStreamRef.current.getTracks().forEach(track => track.stop());
+          mediaStreamRef.current = null;
+        }
       };
 
-      mediaRecorder.start();
+      mediaRecorder.start(1000); // Collect data every second for more reliable recording
+      return stream;
     } catch (error) {
       console.error("Failed to start recording:", error);
       setStatus("Failed to access microphone");
+      return null;
     }
   }, [audioURL]);
 
@@ -241,17 +282,23 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
 
   const handleRecognitionResult = useCallback((event: SpeechRecognitionEvent) => {
     const results = event.results;
+    console.log('Speech recognition result received:', results.length, 'results');
     
     // Process only new results
     for (let i = processedResultsRef.current; i < results.length; i++) {
       const result = results[i];
       const transcript = result[0].transcript.trim();
+      console.log(`Result ${i}: "${transcript}" (final: ${result.isFinal})`);
+      
+      // Always update the recognized text to show what's being heard
+      setRecognizedText(transcript);
       
       if (result.isFinal) {
         // Final result - update word position
         const spokenWords = transcript.split(/\s+/).filter(w => w.length > 0);
         const currentIdx = currentWordIndexRef.current;
         const matchedCount = findMatchingWords(spokenWords, currentIdx);
+        console.log(`Matched ${matchedCount} words from position ${currentIdx}`);
         
         if (matchedCount > 0) {
           const newIndex = Math.min(currentIdx + matchedCount, words.length - 1);
@@ -284,16 +331,12 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
           }
         }
         
-        setRecognizedText(transcript);
         processedResultsRef.current = i + 1;
-      } else {
-        // Interim result - just display it
-        setRecognizedText(transcript);
       }
     }
   }, [findMatchingWords, words.length]);
 
-  const startListening = useCallback(() => {
+  const startListening = useCallback(async () => {
     // Create a fresh recognition instance each time to avoid state issues
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     
@@ -313,15 +356,6 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
         // Ignore errors when aborting
       }
     }
-
-    // Create new recognition instance
-    const recognition = new SpeechRecognition();
-    // iOS Safari has issues with continuous mode - use non-continuous and restart manually
-    // Android Chrome works fine with continuous mode
-    recognition.continuous = !isIOSDevice;
-    recognition.interimResults = true;
-    recognition.language = "en-US";
-    recognitionRef.current = recognition;
     
     // Clear any pending restart timeout
     if (restartTimeoutRef.current) {
@@ -334,7 +368,7 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
     currentWordIndexRef.current = 0;
     processedResultsRef.current = 0;
     setRecognizedText("");
-    setStatus("Listening...");
+    setStatus("Starting...");
     setIsListening(true);
     isListeningRef.current = true;
     
@@ -348,10 +382,37 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
     setAudioURL(null);
     setIsPlaying(false);
     shouldAutoStopRef.current = false;
-    startRecording();
+    
+    // First request microphone permission and start recording
+    // This ensures the permission dialog is shown before speech recognition starts
+    const stream = await startRecording();
+    
+    if (!stream) {
+      setIsListening(false);
+      isListeningRef.current = false;
+      return;
+    }
+    
+    // Small delay to ensure microphone is fully initialized
+    // This is critical for Android Chrome
+    await new Promise(resolve => setTimeout(resolve, 300));
+    
+    // Create new recognition instance AFTER microphone is ready
+    const recognition = new SpeechRecognition();
+    // iOS Safari has issues with continuous mode - use non-continuous and restart manually
+    // Android Chrome works fine with continuous mode
+    recognition.continuous = !isIOSDevice;
+    recognition.interimResults = true;
+    recognition.language = "en-US";
+    recognitionRef.current = recognition;
 
     recognition.onstart = () => {
-      setStatus("Listening... Start reading!");
+      console.log('Speech recognition started');
+      if (isAndroidDevice) {
+        setStatus("Listening... Start reading! (Recording disabled on Android)");
+      } else {
+        setStatus("Listening... Start reading!");
+      }
     };
 
     recognition.onresult = handleRecognitionResult;
@@ -455,7 +516,7 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
       isListeningRef.current = false;
       console.error(error);
     }
-  }, [handleRecognitionResult, audioURL, startRecording, isMobileDevice, isIOSDevice]);
+  }, [handleRecognitionResult, audioURL, startRecording, isMobileDevice, isIOSDevice, isAndroidDevice]);
 
   const stopListening = useCallback(() => {
     setIsListening(false);
