@@ -147,8 +147,17 @@ export default function Page() {
     setViewMode("upload");
 
     try {
-      // Use batch processing for multiple files
+      // Use batch processing for multiple image files
       if (files.length > 1) {
+        // Multiple files - check if all are images (not PDFs)
+        const allImages = Array.from(files).every(f => 
+          !f.name.toLowerCase().endsWith('.pdf')
+        );
+        
+        if (!allImages) {
+          throw new Error("When uploading multiple files, all must be images (no PDFs)");
+        }
+        
         const formData = new FormData();
         
         // Append all files
@@ -183,12 +192,15 @@ export default function Page() {
           throw new Error("No results returned from batch processing");
         }
       } else {
-        // Single file - use regular endpoint
+        // Single file - determine type and use appropriate endpoint
         const file = files[0];
+        const isPdf = file.name.toLowerCase().endsWith('.pdf');
         const form = new FormData();
         form.append("file", file);
 
-        const res = await fetch("/api/extract", {
+        const endpoint = isPdf ? "/api/extract-pdf" : "/api/extract";
+
+        const res = await fetch(endpoint, {
           method: "POST",
           body: form,
         });
@@ -200,7 +212,18 @@ export default function Page() {
 
         const data = await res.json();
         if (data.error) throw new Error(data.error);
-        setResults([data]);
+        
+        // PDF endpoint returns an array of results (one per page)
+        // Regular image endpoint returns a single result
+        if (isPdf) {
+          if (data.results && data.results.length > 0) {
+            setResults(data.results);
+          } else {
+            throw new Error("No pages extracted from PDF");
+          }
+        } else {
+          setResults([data]);
+        }
         setCurrentPageIndex(0);
       }
       

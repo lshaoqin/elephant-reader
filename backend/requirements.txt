@@ -10,3 +10,5 @@ soundfile
 torch==2.8.0
 docker
 pyphen
+pdf2image
+pillow

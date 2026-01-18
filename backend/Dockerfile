@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y \
     sox \
     libsox-fmt-all \
     ffmpeg \
+    poppler-utils \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install Python dependencies

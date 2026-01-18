@@ -55,7 +55,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
             className="text-sm md:text-base text-gray-500 dark:text-gray-400 mt-2"
             style={{ fontFamily: getFontFamily() }}
           >
-            You can upload up to 20 images at once
+            Upload up to 20 images or 1 PDF file
           </p>
         </div>
 
@@ -89,7 +89,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
             </span>
             <input
               type="file"
-              accept="image/*"
+              accept="image/*,.pdf"
               multiple
               onChange={onFileChange}
               className="hidden"
