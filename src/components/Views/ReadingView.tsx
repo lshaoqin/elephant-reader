@@ -1,9 +1,11 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import React, { useState, useRef, ReactNode, useMemo, useCallback } from "react";
+import React, { useState, useRef, ReactNode, useMemo, useCallback, useEffect } from "react";
 import { StopIcon, PlayIcon } from "@radix-ui/react-icons";
 import { Header, Button, TextViewBox } from "@/components";
 import type { TextSettings } from "./SettingsView";
+import { io, Socket } from "socket.io-client";
 
 interface ReadingViewProps {
   displayText: string;
@@ -35,7 +37,7 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
   const audioChunksRef = useRef<Blob[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
-  const recognitionIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const socketRef = useRef<Socket | null>(null);
 
   // Keep the refs in sync with state
   React.useEffect(() => {
@@ -53,7 +55,7 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
     return { plainText: text, words: wordList };
   }, [displayText]);
 
-  // Cleanup audio URL and audio element on unmount
+  // Cleanup audio URL, audio element, and socket on unmount
   React.useEffect(() => {
     return () => {
       if (audioURL) {
@@ -65,13 +67,13 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
       if (mediaStreamRef.current) {
         mediaStreamRef.current.getTracks().forEach(track => track.stop());
       }
-      if (recognitionIntervalRef.current) {
-        clearInterval(recognitionIntervalRef.current);
+      if (socketRef.current) {
+        socketRef.current.disconnect();
       }
     };
   }, [audioURL]);
 
-  // Start audio recording with simultaneous speech recognition via Google API
+  // Start audio recording with streaming speech recognition via WebSocket
   const startRecording = useCallback(async (): Promise<MediaStream | null> => {
     try {
       // Stop any existing stream first
@@ -100,9 +102,17 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
 
+      // Send audio chunks to WebSocket as they become available
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
           audioChunksRef.current.push(event.data);
+          
+          // Send to WebSocket for streaming recognition
+          if (socketRef.current && socketRef.current.connected) {
+            event.data.arrayBuffer().then(buffer => {
+              socketRef.current?.emit('audio_chunk', { audio: buffer });
+            });
+          }
         }
       };
 
@@ -124,7 +134,8 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
         }
       };
 
-      mediaRecorder.start(1000); // Collect data every second
+      // Collect data every 250ms for low-latency streaming
+      mediaRecorder.start(250);
       return stream;
     } catch (error) {
       console.error("Failed to start recording:", error);
@@ -203,10 +214,11 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
     setIsListening(false);
     isListeningRef.current = false;
     
-    // Clear recognition interval
-    if (recognitionIntervalRef.current) {
-      clearInterval(recognitionIntervalRef.current);
-      recognitionIntervalRef.current = null;
+    // Stop WebSocket streaming
+    if (socketRef.current) {
+      socketRef.current.emit('stop_streaming');
+      socketRef.current.disconnect();
+      socketRef.current = null;
     }
     
     // Stop recording
@@ -217,65 +229,52 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
     setStatus("Stopped - Recording saved!");
   }, []);
 
-  // Send audio chunks to backend for speech recognition
-  const processAudioChunk = useCallback(async (audioBlob: Blob) => {
+  // Process recognition results from WebSocket
+  const processRecognitionResult = useCallback((result: any) => {
     if (!isListeningRef.current) return;
 
-    try {
-      const formData = new FormData();
-      formData.append('audio', audioBlob);
+    if (result.error) {
+      console.error('Speech recognition error:', result.error);
+      return;
+    }
 
-      const response = await fetch('/api/speech-recognize', {
-        method: 'POST',
-        body: formData,
-      });
+    if (result.transcript) {
+      // Try matching with all alternatives for better accuracy
+      let bestMatchCount = 0;
+      let bestNewIndex = currentWordIndexRef.current;
+      let bestTranscript = result.transcript;
+      const isFinal = result.is_final || false;
 
-      if (!response.ok) {
-        throw new Error('Speech recognition failed');
+      // Try primary transcript first
+      const primaryWords = result.transcript.split(/\s+/).filter((w: string) => w.length > 0);
+      const currentIdx = currentWordIndexRef.current;
+      const primaryMatchCount = findMatchingWords(primaryWords, currentIdx);
+      
+      if (primaryMatchCount > 0) {
+        bestMatchCount = primaryMatchCount;
+        bestNewIndex = Math.min(currentIdx + primaryMatchCount, words.length - 1);
       }
 
-      const result = await response.json();
-
-      if (result.error) {
-        console.error('Speech recognition error:', result.error);
-        return;
-      }
-
-      if (result.transcript) {
-        // Try matching with all alternatives for better accuracy
-        let bestMatchCount = 0;
-        let bestNewIndex = currentWordIndexRef.current;
-        let bestTranscript = result.transcript;
-
-        // Try primary transcript first
-        const primaryWords = result.transcript.split(/\s+/).filter((w: string) => w.length > 0);
-        const currentIdx = currentWordIndexRef.current;
-        const primaryMatchCount = findMatchingWords(primaryWords, currentIdx);
-        
-        if (primaryMatchCount > 0) {
-          bestMatchCount = primaryMatchCount;
-          bestNewIndex = Math.min(currentIdx + primaryMatchCount, words.length - 1);
-        }
-
-        // Try all alternative transcriptions to find the best match
-        if (result.alternatives && result.alternatives.length > 0) {
-          for (const alt of result.alternatives) {
-            if (!alt.transcript) continue;
-            
-            const altWords = alt.transcript.split(/\s+/).filter((w: string) => w.length > 0);
-            const altMatchCount = findMatchingWords(altWords, currentIdx);
-            
-            // Use this alternative if it matches more words
-            if (altMatchCount > bestMatchCount) {
-              bestMatchCount = altMatchCount;
-              bestNewIndex = Math.min(currentIdx + altMatchCount, words.length - 1);
-              bestTranscript = alt.transcript;
-              console.log(`Better match found in alternative (confidence: ${alt.confidence}): ${altMatchCount} words`);
-            }
+      // Try all alternative transcriptions to find the best match
+      if (result.alternatives && result.alternatives.length > 0) {
+        for (const alt of result.alternatives) {
+          if (!alt.transcript) continue;
+          
+          const altWords = alt.transcript.split(/\s+/).filter((w: string) => w.length > 0);
+          const altMatchCount = findMatchingWords(altWords, currentIdx);
+          
+          // Use this alternative if it matches more words
+          if (altMatchCount > bestMatchCount) {
+            bestMatchCount = altMatchCount;
+            bestNewIndex = Math.min(currentIdx + altMatchCount, words.length - 1);
+            bestTranscript = alt.transcript;
+            console.log(`Better match found in alternative (confidence: ${alt.confidence}): ${altMatchCount} words`);
           }
         }
+      }
 
-        // Update with the best match found
+      // Update with the best match found (only update position on final results)
+      if (isFinal) {
         setRecognizedText(bestTranscript);
         
         if (bestMatchCount > 0) {
@@ -288,9 +287,10 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
             setStatus("Finished reading! Recording saved.");
           }
         }
+      } else {
+        // Show interim results without updating position
+        setRecognizedText(`${bestTranscript} [interim]`);
       }
-    } catch (error) {
-      console.error('Error processing audio:', error);
     }
   }, [findMatchingWords, words.length, stopListening]);
 
@@ -299,7 +299,7 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
     setCurrentWordIndex(0);
     currentWordIndexRef.current = 0;
     setRecognizedText("");
-    setStatus("Starting...");
+    setStatus("Connecting...");
     setIsListening(true);
     isListeningRef.current = true;
     
@@ -313,30 +313,50 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
     setAudioURL(null);
     setIsPlaying(false);
     
-    // Start recording
-    const stream = await startRecording();
+    // Connect to WebSocket
+    const backendUrl = process.env.NEXT_PUBLIC_PYTHON_BACKEND_URL || 'http://localhost:8080';
+    const socket = io(backendUrl, {
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+    });
     
-    if (!stream) {
-      setIsListening(false);
-      isListeningRef.current = false;
-      return;
-    }
-
-    setStatus("Listening... Start reading!");
-
-    // Set up periodic audio chunk processing for speech recognition
-    recognitionIntervalRef.current = setInterval(() => {
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording' && audioChunksRef.current.length > 0) {
-        // Create a blob from accumulated chunks
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm;codecs=opus' });
-        
-        // Send to backend for recognition (async, don't wait)
-        processAudioChunk(audioBlob);
-        
-        // Keep chunks for final recording, don't clear them
+    socketRef.current = socket;
+    
+    socket.on('connect', () => {
+      console.log('WebSocket connected');
+      setStatus("Starting...");
+      
+      // Start streaming session
+      socket.emit('start_streaming', { sample_rate: 48000 });
+    });
+    
+    socket.on('streaming_started', () => {
+      console.log('Streaming started');
+      setStatus("Listening... Start reading!");
+    });
+    
+    socket.on('recognition_result', processRecognitionResult);
+    
+    socket.on('error', (error: any) => {
+      console.error('WebSocket error:', error);
+      setStatus(`Error: ${error.error || 'Unknown error'}`);
+    });
+    
+    socket.on('disconnect', () => {
+      console.log('WebSocket disconnected');
+    });
+    
+    // Wait for connection before starting recording
+    socket.on('streaming_started', async () => {
+      const stream = await startRecording();
+      if (!stream) {
+        setIsListening(false);
+        isListeningRef.current = false;
+        socket.disconnect();
       }
-    }, 3000); // Process every 3 seconds
-  }, [startRecording, processAudioChunk, audioURL]);
+    });
+    
+  }, [startRecording, processRecognitionResult, audioURL]);
 
   // Highlight current word in the text - using consistent word splitting
   const renderTextWithHighlight = useCallback((): ReactNode => {
