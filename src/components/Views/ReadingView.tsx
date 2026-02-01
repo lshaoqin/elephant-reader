@@ -45,24 +45,29 @@ const normalizeWord = (word: string): string => {
   return word.toLowerCase().replace(/[^\w']/g, "");
 };
 
-// Detect iOS devices for speech recognition workarounds
-const isIOS = (): boolean => {
+// Feature detection for touch support (replaces mobile detection)
+const hasTouchSupport = (): boolean => {
   if (typeof window === 'undefined') return false;
-  return /iPad|iPhone|iPod/.test(navigator.userAgent) || 
-    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 };
 
-// Detect Android devices
-const isAndroid = (): boolean => {
+// Feature detection for speech recognition continuous mode support
+// Some browsers (particularly on touch devices) have issues with continuous mode
+const supportsContinuousRecognition = (): boolean => {
   if (typeof window === 'undefined') return false;
-  return /Android/i.test(navigator.userAgent);
+  // Check if this is a touch-enabled device with WebKit (Safari on iOS has issues)
+  const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+  const isWebKit = /WebKit/i.test(navigator.userAgent) && !/Chrome/i.test(navigator.userAgent);
+  return !(hasTouch && isWebKit);
 };
 
-// Detect mobile devices
-const isMobile = (): boolean => {
+// Feature detection for audio recording compatibility
+// Some platforms have conflicts between speech recognition and audio recording
+const canRecordWithSpeechRecognition = (): boolean => {
   if (typeof window === 'undefined') return false;
-  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
-    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  // Android Chrome has conflicts, so we detect it by checking for Android and Chrome
+  const isAndroidChrome = /Android/i.test(navigator.userAgent) && /Chrome/i.test(navigator.userAgent);
+  return !isAndroidChrome;
 };
 
 export const ReadingView: React.FC<ReadingViewProps> = ({
@@ -86,9 +91,9 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const restartTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
-  const [isMobileDevice] = useState(() => isMobile());
-  const [isIOSDevice] = useState(() => isIOS());
-  const [isAndroidDevice] = useState(() => isAndroid());
+  const [hasTouchDevice] = useState(() => hasTouchSupport());
+  const [continuousRecognitionSupport] = useState(() => supportsContinuousRecognition());
+  const [canRecordDuringRecognition] = useState(() => canRecordWithSpeechRecognition());
 
   // Keep the refs in sync with state
   React.useEffect(() => {
@@ -153,9 +158,9 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       mediaStreamRef.current = stream;
       
-      // Skip recording on Android - only request permission
-      if (isAndroid()) {
-        console.log('Android detected - skipping audio recording to allow speech recognition');
+      // Skip recording if platform has conflicts with speech recognition
+      if (!canRecordWithSpeechRecognition()) {
+        console.log('Platform conflict detected - skipping audio recording to allow speech recognition');
         return stream;
       }
       
@@ -383,22 +388,21 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
     let recognition: SpeechRecognitionInstance | null = null;
     if (hasSpeechRecognition) {
       recognition = new SpeechRecognition();
-      // iOS Safari has issues with continuous mode - use non-continuous and restart manually
-      // Android Chrome works fine with continuous mode
-      recognition.continuous = !isIOSDevice;
+      // Some browsers don't support continuous mode reliably - use feature detection
+      recognition.continuous = continuousRecognitionSupport;
       recognition.interimResults = true;
       recognition.language = "en-US";
       recognitionRef.current = recognition;
     }
     
-    // On Android with speech recognition, start speech recognition FIRST before recording
+    // On platforms with recording conflicts, request microphone permission without recording
     // This gives speech recognition priority access to the microphone
-    if (isAndroidDevice && hasSpeechRecognition) {
-      // On Android, just request permission without recording to avoid conflicts
+    if (!canRecordDuringRecognition && hasSpeechRecognition) {
+      // Just request permission without recording to avoid conflicts
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         mediaStreamRef.current = stream;
-        console.log('Android: Microphone permission granted, speech recognition will use it');
+        console.log('Microphone permission granted, speech recognition will use it');
       } catch (error) {
         console.error("Failed to get microphone permission:", error);
         setStatus("Failed to access microphone");
@@ -431,8 +435,8 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
 
     recognition!.onstart = () => {
       console.log('Speech recognition started');
-      if (isAndroidDevice) {
-        setStatus("Listening... Start reading! (Recording disabled on Android)");
+      if (!canRecordDuringRecognition) {
+        setStatus("Listening... Start reading! (Recording disabled due to platform limitations)");
       } else {
         setStatus("Listening... Start reading!");
       }
@@ -446,8 +450,8 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
       // Handle different error types
       switch (event.error) {
         case 'no-speech':
-          // No speech detected - restart on mobile since it stops more frequently
-          if (isMobileDevice && isListeningRef.current) {
+          // No speech detected - restart on touch devices since they stop more frequently
+          if (hasTouchDevice && isListeningRef.current) {
             setStatus("No speech detected, still listening...");
             // Don't restart immediately, let onend handle it
           }
@@ -470,8 +474,8 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
           break;
         case 'network':
           setStatus("Network error - check your connection");
-          // Try to restart after network error on mobile
-          if (isMobileDevice && isListeningRef.current) {
+          // Try to restart after network error on touch devices
+          if (hasTouchDevice && isListeningRef.current) {
             restartTimeoutRef.current = setTimeout(() => {
               if (isListeningRef.current && recognitionRef.current) {
                 try {
@@ -485,7 +489,7 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
           break;
         default:
           setStatus(`Error: ${event.error}`);
-          if (!isMobileDevice) {
+          if (!hasTouchDevice) {
             setIsListening(false);
             isListeningRef.current = false;
           }
@@ -496,17 +500,17 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
       // Auto-restart if still supposed to be listening (browser may stop after silence)
       // Use ref to get current value, not stale closure value
       if (isListeningRef.current && !shouldAutoStopRef.current) {
-        // Add a small delay before restarting on mobile to avoid rapid restart loops
-        const restartDelay = isMobileDevice ? 100 : 0;
+        // Add a small delay before restarting on touch devices to avoid rapid restart loops
+        const restartDelay = hasTouchDevice ? 100 : 0;
         
         restartTimeoutRef.current = setTimeout(() => {
           if (isListeningRef.current && !shouldAutoStopRef.current) {
             setStatus("Listening... Continue reading!");
             try {
-              // Create a new recognition instance for mobile to avoid stale state issues
-              if (isMobileDevice) {
+              // Create a new recognition instance for touch devices to avoid stale state issues
+              if (hasTouchDevice) {
                 const newRecognition = new SpeechRecognition();
-                newRecognition.continuous = !isIOSDevice;
+                newRecognition.continuous = continuousRecognitionSupport;
                 newRecognition.interimResults = true;
                 newRecognition.language = "en-US";
                 newRecognition.onstart = recognition!.onstart;
@@ -539,7 +543,7 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
       isListeningRef.current = false;
       console.error(error);
     }
-  }, [handleRecognitionResult, audioURL, startRecording, isMobileDevice, isIOSDevice, isAndroidDevice]);
+  }, [handleRecognitionResult, audioURL, startRecording, hasTouchDevice, continuousRecognitionSupport, canRecordDuringRecognition]);
 
   const stopListening = useCallback(() => {
     setIsListening(false);
@@ -562,16 +566,9 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
       }
     }
     
-    // On Android, stop the media stream manually since we didn't use MediaRecorder
-    if (isAndroidDevice && mediaStreamRef.current) {
-      mediaStreamRef.current.getTracks().forEach(track => track.stop());
-      mediaStreamRef.current = null;
-      setStatus("Stopped!");
-    } else {
-      stopRecording();
-      setStatus("Stopped - Recording saved!");
-    }
-  }, [stopRecording, isAndroidDevice]);
+    stopRecording();
+    setStatus("Stopped - Recording saved!");
+  }, [stopRecording]);
 
   // Highlight current word in the text - using consistent word splitting
   const renderTextWithHighlight = useCallback((): ReactNode => {
