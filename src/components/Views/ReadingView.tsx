@@ -383,21 +383,7 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
     setIsPlaying(false);
     shouldAutoStopRef.current = false;
     
-    // First request microphone permission and start recording
-    // This ensures the permission dialog is shown before speech recognition starts
-    const stream = await startRecording();
-    
-    if (!stream) {
-      setIsListening(false);
-      isListeningRef.current = false;
-      return;
-    }
-    
-    // Small delay to ensure microphone is fully initialized
-    // This is critical for Android Chrome
-    await new Promise(resolve => setTimeout(resolve, 300));
-    
-    // Create new recognition instance AFTER microphone is ready
+    // Create new recognition instance first
     const recognition = new SpeechRecognition();
     // iOS Safari has issues with continuous mode - use non-continuous and restart manually
     // Android Chrome works fine with continuous mode
@@ -405,6 +391,38 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
     recognition.interimResults = true;
     recognition.language = "en-US";
     recognitionRef.current = recognition;
+    
+    // On Android, start speech recognition FIRST before recording
+    // This gives speech recognition priority access to the microphone
+    if (isAndroidDevice) {
+      // On Android, just request permission without recording to avoid conflicts
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaStreamRef.current = stream;
+        console.log('Android: Microphone permission granted, speech recognition will use it');
+      } catch (error) {
+        console.error("Failed to get microphone permission:", error);
+        setStatus("Failed to access microphone");
+        setIsListening(false);
+        isListeningRef.current = false;
+        return;
+      }
+      
+      // Small delay to ensure microphone is fully initialized
+      await new Promise(resolve => setTimeout(resolve, 200));
+    } else {
+      // On other platforms, start recording first
+      const stream = await startRecording();
+      
+      if (!stream) {
+        setIsListening(false);
+        isListeningRef.current = false;
+        return;
+      }
+      
+      // Small delay to ensure microphone is fully initialized
+      await new Promise(resolve => setTimeout(resolve, 300));
+    }
 
     recognition.onstart = () => {
       console.log('Speech recognition started');
@@ -538,9 +556,17 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
         // Ignore errors when stopping
       }
     }
-    stopRecording();
-    setStatus("Stopped - Recording saved!");
-  }, [stopRecording]);
+    
+    // On Android, stop the media stream manually since we didn't use MediaRecorder
+    if (isAndroidDevice && mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach(track => track.stop());
+      mediaStreamRef.current = null;
+      setStatus("Stopped!");
+    } else {
+      stopRecording();
+      setStatus("Stopped - Recording saved!");
+    }
+  }, [stopRecording, isAndroidDevice]);
 
   // Highlight current word in the text - using consistent word splitting
   const renderTextWithHighlight = useCallback((): ReactNode => {
