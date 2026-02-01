@@ -112,7 +112,7 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       
       if (!SpeechRecognition) {
-        setStatus("Speech Recognition not supported in this browser");
+        setStatus("Speech Recognition not supported - Recording only mode");
         return;
       }
 
@@ -124,7 +124,7 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
       recognitionRef.current = recognition;
       setStatus("Ready to read");
     } catch (error) {
-      setStatus("Failed to initialize speech recognition");
+      setStatus("Speech recognition unavailable - Recording only mode");
       console.error(error);
     }
   }, []);
@@ -337,15 +337,11 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
   }, [findMatchingWords, words.length]);
 
   const startListening = useCallback(async () => {
-    // Create a fresh recognition instance each time to avoid state issues
+    // Check if speech recognition is available
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const hasSpeechRecognition = !!SpeechRecognition;
     
-    if (!SpeechRecognition) {
-      setStatus("Speech Recognition not supported in this browser");
-      return;
-    }
-
-    // Stop any existing recognition
+    // Stop any existing recognition if available
     if (recognitionRef.current) {
       recognitionRef.current.onend = null;
       recognitionRef.current.onerror = null;
@@ -383,18 +379,21 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
     setIsPlaying(false);
     shouldAutoStopRef.current = false;
     
-    // Create new recognition instance first
-    const recognition = new SpeechRecognition();
-    // iOS Safari has issues with continuous mode - use non-continuous and restart manually
-    // Android Chrome works fine with continuous mode
-    recognition.continuous = !isIOSDevice;
-    recognition.interimResults = true;
-    recognition.language = "en-US";
-    recognitionRef.current = recognition;
+    // Only create recognition instance if speech recognition is available
+    let recognition: SpeechRecognitionInstance | null = null;
+    if (hasSpeechRecognition) {
+      recognition = new SpeechRecognition();
+      // iOS Safari has issues with continuous mode - use non-continuous and restart manually
+      // Android Chrome works fine with continuous mode
+      recognition.continuous = !isIOSDevice;
+      recognition.interimResults = true;
+      recognition.language = "en-US";
+      recognitionRef.current = recognition;
+    }
     
-    // On Android, start speech recognition FIRST before recording
+    // On Android with speech recognition, start speech recognition FIRST before recording
     // This gives speech recognition priority access to the microphone
-    if (isAndroidDevice) {
+    if (isAndroidDevice && hasSpeechRecognition) {
       // On Android, just request permission without recording to avoid conflicts
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -411,7 +410,7 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
       // Small delay to ensure microphone is fully initialized
       await new Promise(resolve => setTimeout(resolve, 200));
     } else {
-      // On other platforms, start recording first
+      // On other platforms (or no speech recognition), start recording first
       const stream = await startRecording();
       
       if (!stream) {
@@ -423,8 +422,14 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
       // Small delay to ensure microphone is fully initialized
       await new Promise(resolve => setTimeout(resolve, 300));
     }
+    
+    // If no speech recognition, we're in recording-only mode
+    if (!hasSpeechRecognition) {
+      setStatus("Recording... (Speech recognition not available)");
+      return;
+    }
 
-    recognition.onstart = () => {
+    recognition!.onstart = () => {
       console.log('Speech recognition started');
       if (isAndroidDevice) {
         setStatus("Listening... Start reading! (Recording disabled on Android)");
@@ -433,9 +438,9 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
       }
     };
 
-    recognition.onresult = handleRecognitionResult;
+    recognition!.onresult = handleRecognitionResult;
 
-    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+    recognition!.onerror = (event: SpeechRecognitionErrorEvent) => {
       console.log('Speech recognition error:', event.error);
       
       // Handle different error types
@@ -487,7 +492,7 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
       }
     };
 
-    recognition.onend = () => {
+    recognition!.onend = () => {
       // Auto-restart if still supposed to be listening (browser may stop after silence)
       // Use ref to get current value, not stale closure value
       if (isListeningRef.current && !shouldAutoStopRef.current) {
@@ -504,14 +509,14 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
                 newRecognition.continuous = !isIOSDevice;
                 newRecognition.interimResults = true;
                 newRecognition.language = "en-US";
-                newRecognition.onstart = recognition.onstart;
-                newRecognition.onresult = recognition.onresult;
-                newRecognition.onerror = recognition.onerror;
-                newRecognition.onend = recognition.onend;
+                newRecognition.onstart = recognition!.onstart;
+                newRecognition.onresult = recognition!.onresult;
+                newRecognition.onerror = recognition!.onerror;
+                newRecognition.onend = recognition!.onend;
                 recognitionRef.current = newRecognition;
                 newRecognition.start();
               } else {
-                recognition.start();
+                recognition!.start();
               }
             } catch (e) {
               console.error('Failed to restart recognition:', e);
@@ -527,7 +532,7 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
     };
 
     try {
-      recognition.start();
+      recognition!.start();
     } catch (error) {
       setStatus("Failed to start recognition");
       setIsListening(false);
