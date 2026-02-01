@@ -65,9 +65,12 @@ const supportsContinuousRecognition = (): boolean => {
 // Some platforms have conflicts between speech recognition and audio recording
 const canRecordWithSpeechRecognition = (): boolean => {
   if (typeof window === 'undefined') return false;
-  // Android Chrome has conflicts, so we detect it by checking for Android and Chrome
-  const isAndroidChrome = /Android/i.test(navigator.userAgent) && /Chrome/i.test(navigator.userAgent);
-  return !isAndroidChrome;
+  // Android has conflicts between MediaRecorder and SpeechRecognition
+  // Detect Android broadly - includes Samsung, other manufacturers, various browsers
+  const isAndroid = /Android/i.test(navigator.userAgent) || 
+    /Linux; U;/.test(navigator.userAgent) || // Some older Android devices
+    /Samsung/i.test(navigator.userAgent); // Samsung devices
+  return !isAndroid;
 };
 
 export const ReadingView: React.FC<ReadingViewProps> = ({
