@@ -398,11 +398,14 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
     // On platforms with recording conflicts, request microphone permission without recording
     // This gives speech recognition priority access to the microphone
     if (!canRecordDuringRecognition && hasSpeechRecognition) {
-      // Just request permission without recording to avoid conflicts
+      // Just request permission, then immediately release the stream
+      // Speech recognition on Android needs exclusive microphone access
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        mediaStreamRef.current = stream;
-        console.log('Microphone permission granted, speech recognition will use it');
+        // Immediately stop all tracks to release the microphone for speech recognition
+        stream.getTracks().forEach(track => track.stop());
+        mediaStreamRef.current = null;
+        console.log('Microphone permission granted and released for speech recognition');
       } catch (error) {
         console.error("Failed to get microphone permission:", error);
         setStatus("Failed to access microphone");
@@ -411,8 +414,8 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
         return;
       }
       
-      // Small delay to ensure microphone is fully initialized
-      await new Promise(resolve => setTimeout(resolve, 200));
+      // Small delay to ensure microphone is fully released
+      await new Promise(resolve => setTimeout(resolve, 100));
     } else {
       // On other platforms (or no speech recognition), start recording first
       const stream = await startRecording();
