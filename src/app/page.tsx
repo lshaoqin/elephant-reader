@@ -113,6 +113,8 @@ export default function Page() {
   const [previousViewMode, setPreviousViewMode] = useState<ViewMode>("upload");
   const audioRef = React.useRef<HTMLAudioElement>(null!);
   const ttsAbortControllerRef = React.useRef<AbortController | null>(null);
+  const extractionAbortControllerRef = React.useRef<AbortController | null>(null);
+  const formattingAbortControllerRef = React.useRef<AbortController | null>(null);
   
   // Get current result based on page index
   const result = results[currentPageIndex] || null;
@@ -146,6 +148,12 @@ export default function Page() {
     setSelectedBlockIndex(null);
     setViewMode("upload");
 
+    // Abort any previous extraction request
+    if (extractionAbortControllerRef.current) {
+      extractionAbortControllerRef.current.abort();
+    }
+    extractionAbortControllerRef.current = new AbortController();
+
     try {
       // Use batch processing for multiple image files
       if (files.length > 1) {
@@ -166,6 +174,7 @@ export default function Page() {
         }
 
         const res = await fetch("/api/extract-batch", {
+          signal: extractionAbortControllerRef.current.signal,
           method: "POST",
           body: formData,
         });
@@ -201,6 +210,7 @@ export default function Page() {
         const endpoint = isPdf ? "/api/extract-pdf" : "/api/extract";
 
         const res = await fetch(endpoint, {
+          signal: extractionAbortControllerRef.current.signal,
           method: "POST",
           body: form,
         });
@@ -232,6 +242,10 @@ export default function Page() {
       setCachedAudioKey(null);
       setViewMode("image");
     } catch (err: unknown) {
+      if (err instanceof Error && err.name === "AbortError") {
+        console.log("Extraction was cancelled");
+        return;
+      }
       const msg = err instanceof Error ? err.message : String(err);
       setError(msg);
     } finally {
@@ -269,10 +283,17 @@ export default function Page() {
     // Start formatting
     setFormattingBlockIndex(blockIndex);
     
+    // Abort any previous formatting request
+    if (formattingAbortControllerRef.current) {
+      formattingAbortControllerRef.current.abort();
+    }
+    formattingAbortControllerRef.current = new AbortController();
+    
     try {
       const rawText = result.blocks[blockIndex].text;
       
       const response = await fetch("/api/format-text", {
+        signal: formattingAbortControllerRef.current.signal,
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: rawText }),
@@ -297,6 +318,10 @@ export default function Page() {
       setCachedAudioKey(null);
       setViewMode("text");
     } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") {
+        console.log("Formatting was cancelled");
+        return;
+      }
       const msg = err instanceof Error ? err.message : String(err);
       setError(msg);
     } finally {
@@ -448,6 +473,21 @@ export default function Page() {
     }
   };
 
+  const handleCancelLoading = () => {
+    if (extractionAbortControllerRef.current) {
+      extractionAbortControllerRef.current.abort();
+    }
+    setLoading(false);
+    setLoadingFileCount(0);
+  };
+
+  const handleCancelFormatting = () => {
+    if (formattingAbortControllerRef.current) {
+      formattingAbortControllerRef.current.abort();
+    }
+    setFormattingBlockIndex(null);
+  };
+
   // Upload View
   if (viewMode === "upload") {
     return (
@@ -465,11 +505,12 @@ export default function Page() {
           }]);
           setCurrentPageIndex(0);
           setSelectedBlockIndex(0);
-          setFormattedCache({ "page-0-0": "" });
+          setFormattedCache({ "page-0-block-0": "" });
           setViewMode("edit");
         }}
         settings={settings}
         onSettingsClick={() => setViewMode("settings")}
+        onCancelLoading={handleCancelLoading}
       />
     );
   }
@@ -522,6 +563,7 @@ export default function Page() {
         }}
         onImageLoad={handleImageLoad}
         onBlockClick={formatBlockText}
+        onCancelFormatting={handleCancelFormatting}
       />
     );
   }

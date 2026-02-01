@@ -36,6 +36,7 @@ interface ImageViewProps {
   totalPages?: number;
   onNextPage?: () => void;
   onPrevPage?: () => void;
+  onCancelFormatting?: () => void;
 }
 
 export const ImageView: React.FC<ImageViewProps> = ({
@@ -52,6 +53,7 @@ export const ImageView: React.FC<ImageViewProps> = ({
   totalPages = 1,
   onNextPage,
   onPrevPage,
+  onCancelFormatting,
 }) => {
   // Add keyboard navigation
   useEffect(() => {
@@ -143,12 +145,23 @@ export const ImageView: React.FC<ImageViewProps> = ({
 
         {/* Loading Overlay */}
         {formattingBlockIndex !== null && (
-          <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-            <LoadingSpinner
-              label="Formatting text…"
-              size="md"
-              color="yellow"
-            />
+          <div className="absolute inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center">
+            <div className="flex flex-col items-center gap-6">
+              <LoadingSpinner
+                label="Formatting text…"
+                size="lg"
+                color="white"
+              />
+              {onCancelFormatting && (
+                <button
+                  onClick={onCancelFormatting}
+                  className="px-6 py-3 border-2 border-blue-400 rounded-lg hover:bg-blue-400/10 text-white font-semibold transition-colors"
+                  style={{ fontFamily: settings.fontFamily }}
+                >
+                  Cancel
+                </button>
+              )}
+            </div>
           </div>
         )}
       </div>
