@@ -12,57 +12,9 @@ interface ReadingViewProps {
   settings: TextSettings;
 }
 
-interface SpeechRecognitionEvent extends Event {
-  results: SpeechRecognitionResultList;
-  resultIndex: number;
-}
-
-interface SpeechRecognitionErrorEvent extends Event {
-  error: string;
-}
-
-declare global {
-  interface Window {
-    SpeechRecognition: new () => SpeechRecognitionInstance;
-    webkitSpeechRecognition: new () => SpeechRecognitionInstance;
-  }
-  interface SpeechRecognitionInstance {
-    continuous: boolean;
-    interimResults: boolean;
-    language: string;
-    start(): void;
-    stop(): void;
-    abort(): void;
-    onstart: ((event: Event) => void) | null;
-    onresult: ((event: SpeechRecognitionEvent) => void) | null;
-    onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
-    onend: ((event: Event) => void) | null;
-  }
-}
-
 // Helper function to normalize a word for comparison (remove punctuation, lowercase)
 const normalizeWord = (word: string): string => {
   return word.toLowerCase().replace(/[^\w']/g, "");
-};
-
-// Detect iOS devices for speech recognition workarounds
-const isIOS = (): boolean => {
-  if (typeof window === 'undefined') return false;
-  return /iPad|iPhone|iPod/.test(navigator.userAgent) || 
-    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-};
-
-// Detect Android devices
-const isAndroid = (): boolean => {
-  if (typeof window === 'undefined') return false;
-  return /Android/i.test(navigator.userAgent);
-};
-
-// Detect mobile devices
-const isMobile = (): boolean => {
-  if (typeof window === 'undefined') return false;
-  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
-    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 };
 
 export const ReadingView: React.FC<ReadingViewProps> = ({
@@ -77,18 +29,13 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
   const [status, setStatus] = useState("Ready to read");
   const [audioURL, setAudioURL] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
-  const processedResultsRef = useRef<number>(0); // Track which results we've already processed
-  const currentWordIndexRef = useRef<number>(0); // Ref to track current word index in callbacks
-  const isListeningRef = useRef<boolean>(false); // Ref to track listening state in callbacks
+  const currentWordIndexRef = useRef<number>(0);
+  const isListeningRef = useRef<boolean>(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const restartTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
-  const [isMobileDevice] = useState(() => isMobile());
-  const [isIOSDevice] = useState(() => isIOS());
-  const [isAndroidDevice] = useState(() => isAndroid());
+  const recognitionIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Keep the refs in sync with state
   React.useEffect(() => {
@@ -106,29 +53,6 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
     return { plainText: text, words: wordList };
   }, [displayText]);
 
-  // Initialize Web Speech API
-  React.useEffect(() => {
-    try {
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      
-      if (!SpeechRecognition) {
-        setStatus("Speech Recognition not supported - Recording only mode");
-        return;
-      }
-
-      const recognition = new SpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.language = "en-US";
-      
-      recognitionRef.current = recognition;
-      setStatus("Ready to read");
-    } catch (error) {
-      setStatus("Speech recognition unavailable - Recording only mode");
-      console.error(error);
-    }
-  }, []);
-
   // Cleanup audio URL and audio element on unmount
   React.useEffect(() => {
     return () => {
@@ -138,11 +62,16 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
       if (audioRef.current) {
         audioRef.current.pause();
       }
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach(track => track.stop());
+      }
+      if (recognitionIntervalRef.current) {
+        clearInterval(recognitionIntervalRef.current);
+      }
     };
   }, [audioURL]);
 
-  // Start audio recording - returns the stream for use with speech recognition
-  // Note: Recording is disabled on Android to avoid conflicts with speech recognition
+  // Start audio recording with simultaneous speech recognition via Google API
   const startRecording = useCallback(async (): Promise<MediaStream | null> => {
     try {
       // Stop any existing stream first
@@ -153,14 +82,8 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       mediaStreamRef.current = stream;
       
-      // Skip recording on Android - only request permission
-      if (isAndroid()) {
-        console.log('Android detected - skipping audio recording to allow speech recognition');
-        return stream;
-      }
-      
-      // Check for supported MIME types on mobile
-      let mimeType = 'audio/webm';
+      // Check for supported MIME types
+      let mimeType = 'audio/webm;codecs=opus';
       if (typeof MediaRecorder !== 'undefined') {
         if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
           mimeType = 'audio/webm;codecs=opus';
@@ -201,7 +124,7 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
         }
       };
 
-      mediaRecorder.start(1000); // Collect data every second for more reliable recording
+      mediaRecorder.start(1000); // Collect data every second
       return stream;
     } catch (error) {
       console.error("Failed to start recording:", error);
@@ -262,7 +185,6 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
         matchedCount++;
       } else {
         // Also check if it's a close match (for speech recognition errors)
-        // Allow matching if the spoken word is very similar
         const isSimilar = 
           normalizedTarget.startsWith(normalizedSpoken) ||
           normalizedSpoken.startsWith(normalizedTarget) ||
@@ -277,98 +199,111 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
     return matchedCount;
   }, [words]);
 
-  // Ref to track if we should auto-stop (to avoid stopping multiple times)
-  const shouldAutoStopRef = useRef<boolean>(false);
-
-  const handleRecognitionResult = useCallback((event: SpeechRecognitionEvent) => {
-    const results = event.results;
-    console.log('Speech recognition result received:', results.length, 'results');
+  const stopListening = useCallback(() => {
+    setIsListening(false);
+    isListeningRef.current = false;
     
-    // Process only new results
-    for (let i = processedResultsRef.current; i < results.length; i++) {
-      const result = results[i];
-      const transcript = result[0].transcript.trim();
-      console.log(`Result ${i}: "${transcript}" (final: ${result.isFinal})`);
-      
-      // Always update the recognized text to show what's being heard
-      setRecognizedText(transcript);
-      
-      if (result.isFinal) {
-        // Final result - update word position
-        const spokenWords = transcript.split(/\s+/).filter(w => w.length > 0);
+    // Clear recognition interval
+    if (recognitionIntervalRef.current) {
+      clearInterval(recognitionIntervalRef.current);
+      recognitionIntervalRef.current = null;
+    }
+    
+    // Stop recording
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop();
+    }
+    
+    setStatus("Stopped - Recording saved!");
+  }, []);
+
+  // Send audio chunks to backend for speech recognition
+  const processAudioChunk = useCallback(async (audioBlob: Blob) => {
+    if (!isListeningRef.current) return;
+
+    try {
+      const formData = new FormData();
+      formData.append('audio', audioBlob);
+
+      const response = await fetch('/api/speech-recognize', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error('Speech recognition failed');
+      }
+
+      const result = await response.json();
+
+      if (result.error) {
+        console.error('Speech recognition error:', result.error);
+        return;
+      }
+
+      if (result.transcript) {
+        // Try matching with all alternatives for better accuracy
+        let bestMatchCount = 0;
+        let bestNewIndex = currentWordIndexRef.current;
+        let bestTranscript = result.transcript;
+
+        // Try primary transcript first
+        const primaryWords = result.transcript.split(/\s+/).filter((w: string) => w.length > 0);
         const currentIdx = currentWordIndexRef.current;
-        const matchedCount = findMatchingWords(spokenWords, currentIdx);
-        console.log(`Matched ${matchedCount} words from position ${currentIdx}`);
+        const primaryMatchCount = findMatchingWords(primaryWords, currentIdx);
         
-        if (matchedCount > 0) {
-          const newIndex = Math.min(currentIdx + matchedCount, words.length - 1);
-          setCurrentWordIndex(newIndex);
-          setStatus(`Recognized ${matchedCount} word(s). Now at word ${newIndex + 1}`);
-          
-          // Auto-stop when the last word is reached
-          if (newIndex >= words.length - 1 && !shouldAutoStopRef.current) {
-            shouldAutoStopRef.current = true;
-            setStatus("Finished reading! Stopping...");
-            // Use setTimeout to allow state updates to complete
-            setTimeout(() => {
-              setIsListening(false);
-              isListeningRef.current = false;
-              if (recognitionRef.current) {
-                recognitionRef.current.onend = null;
-                recognitionRef.current.onerror = null;
-                recognitionRef.current.onresult = null;
-                try {
-                  recognitionRef.current.stop();
-                } catch {
-                  // Ignore errors when stopping
-                }
-              }
-              if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
-                mediaRecorderRef.current.stop();
-              }
-              setStatus("Finished reading! Recording saved.");
-            }, 500);
+        if (primaryMatchCount > 0) {
+          bestMatchCount = primaryMatchCount;
+          bestNewIndex = Math.min(currentIdx + primaryMatchCount, words.length - 1);
+        }
+
+        // Try all alternative transcriptions to find the best match
+        if (result.alternatives && result.alternatives.length > 0) {
+          for (const alt of result.alternatives) {
+            if (!alt.transcript) continue;
+            
+            const altWords = alt.transcript.split(/\s+/).filter((w: string) => w.length > 0);
+            const altMatchCount = findMatchingWords(altWords, currentIdx);
+            
+            // Use this alternative if it matches more words
+            if (altMatchCount > bestMatchCount) {
+              bestMatchCount = altMatchCount;
+              bestNewIndex = Math.min(currentIdx + altMatchCount, words.length - 1);
+              bestTranscript = alt.transcript;
+              console.log(`Better match found in alternative (confidence: ${alt.confidence}): ${altMatchCount} words`);
+            }
           }
         }
+
+        // Update with the best match found
+        setRecognizedText(bestTranscript);
         
-        processedResultsRef.current = i + 1;
+        if (bestMatchCount > 0) {
+          setCurrentWordIndex(bestNewIndex);
+          setStatus(`Reading... (${bestNewIndex + 1}/${words.length} words)`);
+          
+          // Auto-stop when finished
+          if (bestNewIndex >= words.length - 1) {
+            stopListening();
+            setStatus("Finished reading! Recording saved.");
+          }
+        }
       }
+    } catch (error) {
+      console.error('Error processing audio:', error);
     }
-  }, [findMatchingWords, words.length]);
+  }, [findMatchingWords, words.length, stopListening]);
 
   const startListening = useCallback(async () => {
-    // Check if speech recognition is available
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    const hasSpeechRecognition = !!SpeechRecognition;
-    
-    // Stop any existing recognition if available
-    if (recognitionRef.current) {
-      recognitionRef.current.onend = null;
-      recognitionRef.current.onerror = null;
-      recognitionRef.current.onresult = null;
-      try {
-        recognitionRef.current.abort();
-      } catch {
-        // Ignore errors when aborting
-      }
-    }
-    
-    // Clear any pending restart timeout
-    if (restartTimeoutRef.current) {
-      clearTimeout(restartTimeoutRef.current);
-      restartTimeoutRef.current = null;
-    }
-
     // Reset state
     setCurrentWordIndex(0);
     currentWordIndexRef.current = 0;
-    processedResultsRef.current = 0;
     setRecognizedText("");
     setStatus("Starting...");
     setIsListening(true);
     isListeningRef.current = true;
     
-    // Clear previous recording and start new one
+    // Clear previous recording
     if (audioRef.current) {
       audioRef.current.pause();
     }
@@ -377,201 +312,31 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
     }
     setAudioURL(null);
     setIsPlaying(false);
-    shouldAutoStopRef.current = false;
     
-    // Only create recognition instance if speech recognition is available
-    let recognition: SpeechRecognitionInstance | null = null;
-    if (hasSpeechRecognition) {
-      recognition = new SpeechRecognition();
-      // iOS Safari has issues with continuous mode - use non-continuous and restart manually
-      // Android Chrome works fine with continuous mode
-      recognition.continuous = !isIOSDevice;
-      recognition.interimResults = true;
-      recognition.language = "en-US";
-      recognitionRef.current = recognition;
-    }
+    // Start recording
+    const stream = await startRecording();
     
-    // On Android with speech recognition, start speech recognition FIRST before recording
-    // This gives speech recognition priority access to the microphone
-    if (isAndroidDevice && hasSpeechRecognition) {
-      // On Android, just request permission without recording to avoid conflicts
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        mediaStreamRef.current = stream;
-        console.log('Android: Microphone permission granted, speech recognition will use it');
-      } catch (error) {
-        console.error("Failed to get microphone permission:", error);
-        setStatus("Failed to access microphone");
-        setIsListening(false);
-        isListeningRef.current = false;
-        return;
-      }
-      
-      // Small delay to ensure microphone is fully initialized
-      await new Promise(resolve => setTimeout(resolve, 200));
-    } else {
-      // On other platforms (or no speech recognition), start recording first
-      const stream = await startRecording();
-      
-      if (!stream) {
-        setIsListening(false);
-        isListeningRef.current = false;
-        return;
-      }
-      
-      // Small delay to ensure microphone is fully initialized
-      await new Promise(resolve => setTimeout(resolve, 300));
-    }
-    
-    // If no speech recognition, we're in recording-only mode
-    if (!hasSpeechRecognition) {
-      setStatus("Recording... (Speech recognition not available)");
+    if (!stream) {
+      setIsListening(false);
+      isListeningRef.current = false;
       return;
     }
 
-    recognition!.onstart = () => {
-      console.log('Speech recognition started');
-      if (isAndroidDevice) {
-        setStatus("Listening... Start reading! (Recording disabled on Android)");
-      } else {
-        setStatus("Listening... Start reading!");
-      }
-    };
+    setStatus("Listening... Start reading!");
 
-    recognition!.onresult = handleRecognitionResult;
-
-    recognition!.onerror = (event: SpeechRecognitionErrorEvent) => {
-      console.log('Speech recognition error:', event.error);
-      
-      // Handle different error types
-      switch (event.error) {
-        case 'no-speech':
-          // No speech detected - restart on mobile since it stops more frequently
-          if (isMobileDevice && isListeningRef.current) {
-            setStatus("No speech detected, still listening...");
-            // Don't restart immediately, let onend handle it
-          }
-          break;
-        case 'aborted':
-          // User or system aborted - try to restart if still listening
-          if (isListeningRef.current) {
-            setStatus("Restarting...");
-          }
-          break;
-        case 'audio-capture':
-          setStatus("Microphone error - please check permissions");
-          setIsListening(false);
-          isListeningRef.current = false;
-          break;
-        case 'not-allowed':
-          setStatus("Microphone access denied");
-          setIsListening(false);
-          isListeningRef.current = false;
-          break;
-        case 'network':
-          setStatus("Network error - check your connection");
-          // Try to restart after network error on mobile
-          if (isMobileDevice && isListeningRef.current) {
-            restartTimeoutRef.current = setTimeout(() => {
-              if (isListeningRef.current && recognitionRef.current) {
-                try {
-                  recognitionRef.current.start();
-                } catch {
-                  // Ignore
-                }
-              }
-            }, 1000);
-          }
-          break;
-        default:
-          setStatus(`Error: ${event.error}`);
-          if (!isMobileDevice) {
-            setIsListening(false);
-            isListeningRef.current = false;
-          }
-      }
-    };
-
-    recognition!.onend = () => {
-      // Auto-restart if still supposed to be listening (browser may stop after silence)
-      // Use ref to get current value, not stale closure value
-      if (isListeningRef.current && !shouldAutoStopRef.current) {
-        // Add a small delay before restarting on mobile to avoid rapid restart loops
-        const restartDelay = isMobileDevice ? 100 : 0;
+    // Set up periodic audio chunk processing for speech recognition
+    recognitionIntervalRef.current = setInterval(() => {
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording' && audioChunksRef.current.length > 0) {
+        // Create a blob from accumulated chunks
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm;codecs=opus' });
         
-        restartTimeoutRef.current = setTimeout(() => {
-          if (isListeningRef.current && !shouldAutoStopRef.current) {
-            setStatus("Listening... Continue reading!");
-            try {
-              // Create a new recognition instance for mobile to avoid stale state issues
-              if (isMobileDevice) {
-                const newRecognition = new SpeechRecognition();
-                newRecognition.continuous = !isIOSDevice;
-                newRecognition.interimResults = true;
-                newRecognition.language = "en-US";
-                newRecognition.onstart = recognition!.onstart;
-                newRecognition.onresult = recognition!.onresult;
-                newRecognition.onerror = recognition!.onerror;
-                newRecognition.onend = recognition!.onend;
-                recognitionRef.current = newRecognition;
-                newRecognition.start();
-              } else {
-                recognition!.start();
-              }
-            } catch (e) {
-              console.error('Failed to restart recognition:', e);
-              setStatus("Tap to restart listening");
-              setIsListening(false);
-              isListeningRef.current = false;
-            }
-          }
-        }, restartDelay);
-      } else {
-        setStatus(audioURL ? "Stopped - Recording saved!" : "Stopped");
+        // Send to backend for recognition (async, don't wait)
+        processAudioChunk(audioBlob);
+        
+        // Keep chunks for final recording, don't clear them
       }
-    };
-
-    try {
-      recognition!.start();
-    } catch (error) {
-      setStatus("Failed to start recognition");
-      setIsListening(false);
-      isListeningRef.current = false;
-      console.error(error);
-    }
-  }, [handleRecognitionResult, audioURL, startRecording, isMobileDevice, isIOSDevice, isAndroidDevice]);
-
-  const stopListening = useCallback(() => {
-    setIsListening(false);
-    isListeningRef.current = false;
-    
-    // Clear any pending restart timeout
-    if (restartTimeoutRef.current) {
-      clearTimeout(restartTimeoutRef.current);
-      restartTimeoutRef.current = null;
-    }
-    
-    if (recognitionRef.current) {
-      recognitionRef.current.onend = null; // Prevent auto-restart
-      recognitionRef.current.onerror = null;
-      recognitionRef.current.onresult = null;
-      try {
-        recognitionRef.current.stop();
-      } catch {
-        // Ignore errors when stopping
-      }
-    }
-    
-    // On Android, stop the media stream manually since we didn't use MediaRecorder
-    if (isAndroidDevice && mediaStreamRef.current) {
-      mediaStreamRef.current.getTracks().forEach(track => track.stop());
-      mediaStreamRef.current = null;
-      setStatus("Stopped!");
-    } else {
-      stopRecording();
-      setStatus("Stopped - Recording saved!");
-    }
-  }, [stopRecording, isAndroidDevice]);
+    }, 3000); // Process every 3 seconds
+  }, [startRecording, processAudioChunk, audioURL]);
 
   // Highlight current word in the text - using consistent word splitting
   const renderTextWithHighlight = useCallback((): ReactNode => {

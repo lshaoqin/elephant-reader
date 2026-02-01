@@ -10,6 +10,7 @@ from routes.tts import tts_bp
 from routes.google_tts import google_tts_bp
 from routes.health import health_bp
 from routes.define_word import define_word_bp
+from routes.speech_recognition import speech_recognition_bp
 
 
 def create_app():
@@ -33,6 +34,7 @@ def create_app():
     app.register_blueprint(google_tts_bp)
     app.register_blueprint(health_bp)
     app.register_blueprint(define_word_bp)
+    app.register_blueprint(speech_recognition_bp)
     
     return app
 
