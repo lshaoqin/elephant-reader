@@ -547,15 +547,37 @@ export default function Page() {
           );
           if (!confirmed) return;
           
-          // Abort any ongoing TTS request
+          // Abort any ongoing requests
           if (ttsAbortControllerRef.current) {
             ttsAbortControllerRef.current.abort();
           }
-          setIsLoadingAudio(false);
-          setViewMode("upload");
-          // Clear audio cache when going back to upload
+          if (formattingAbortControllerRef.current) {
+            formattingAbortControllerRef.current.abort();
+          }
+          
+          // Clear ALL state to prevent caching issues
+          setResults([]);
+          setCurrentPageIndex(0);
+          setSelectedBlockIndex(null);
+          setImageScale({ width: 0, height: 0 });
+          setFormattedCache({});
+          setFormattingBlockIndex(null);
           setCachedAudioUrl(null);
           setCachedAudioKey(null);
+          setWordTimestamps([]);
+          setCurrentPlaybackTime(0);
+          setIsLoadingAudio(false);
+          setIsPlayingAudio(false);
+          setError(null);
+          
+          // Stop and clear audio
+          if (audioRef.current) {
+            audioRef.current.pause();
+            audioRef.current.currentTime = 0;
+            audioRef.current.src = '';
+          }
+          
+          setViewMode("upload");
         }}
         onSettingsClick={() => {
           setPreviousViewMode("image");
