@@ -89,6 +89,11 @@ export const TextView: React.FC<TextViewProps> = ({
     }
   };
 
+  const handleStop = () => {
+    onStopAudio();
+    setHasAudioLoaded(false);
+  };
+
   // Build a mapping of timestamp index to word index at the start
   const buildTimestampWordMap = (text: string): Map<number, number> => {
     const map = new Map<number, number>();
@@ -411,7 +416,7 @@ export const TextView: React.FC<TextViewProps> = ({
                   audioRef={audioRef}
                   isPlaying={isPlayingAudio}
                   onPlayPause={onPlayPauseAudio}
-                  onStop={onStopAudio}
+                  onStop={handleStop}
                 />
                 <div className="flex gap-2 items-center">
                   <button
