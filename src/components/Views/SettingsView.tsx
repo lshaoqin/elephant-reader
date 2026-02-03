@@ -348,7 +348,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 />
               ) : (
                 <p
-                  className="text-base leading-relaxed"
                   style={{
                     color: settings.fontColor,
                   }}
