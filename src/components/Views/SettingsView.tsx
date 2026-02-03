@@ -172,9 +172,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       ? "border-blue-600 bg-blue-100 dark:bg-blue-900"
                       : "border-gray-300 dark:border-gray-600 hover:border-blue-400"
                   }`}
-                  style={{ fontFamily: font.value }}
                 >
-                  {font.name}
+                  <span style={{ fontFamily: font.value }}>
+                    {font.name}
+                  </span>
                 </button>
               ))}
             </div>
