@@ -58,8 +58,6 @@ const checkFontAvailability = (fontName: string): boolean => {
   return baselineWidth !== testWidth;
 };
 
-const FONT_SIZES = [14, 16, 18, 20, 22, 24, 28, 32];
-
 const LINE_SPACINGS = [1, 1.2, 1.5, 1.8, 2];
 
 const BACKGROUND_COLORS = [
@@ -139,7 +137,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     >
       <Header onBackClick={onBackClick} showSettings={false} />
 
-      <div className="flex-1 overflow-auto p-6 sm:p-8 lg:p-12">
+      {/* Main content area with scrollable settings */}
+      <div className="flex-1 overflow-auto p-6 sm:p-8 lg:p-12 pb-0">
         <div className="max-w-2xl mx-auto">
           <h1
             className="text-3xl font-bold mb-8"
@@ -312,7 +311,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </div>
 
           {/* Restore Defaults Button */}
-          <div className="mb-8 flex justify-center">
+          <div className="mb-6 flex justify-center">
             <button
               onClick={handleRestoreDefaults}
               className="px-6 py-3 bg-gray-500 hover:bg-gray-600 text-white font-semibold rounded-lg transition-colors"
@@ -321,42 +320,54 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               Restore Defaults
             </button>
           </div>
+        </div>
+      </div>
 
-          {/* Preview */}
-          <div className="mt-12 p-6 border-2 border-gray-300 dark:border-gray-600 rounded-lg">
-            <label
-              className="block text-lg font-semibold mb-4"
-              style={{
-                fontFamily: settings.fontFamily,
-                color: getDisplayColor(),
-              }}
-            >
-              Preview
-            </label>
-            <div
-              style={{
-                fontFamily: settings.fontFamily,
-                fontSize: `${settings.fontSize}px`,
-                lineHeight: settings.lineSpacing,
-                backgroundColor: settings.backgroundColor,
-              }}
-            >
-              {settings.fontColor === "gradient" ? (
-                <GradientReader
-                  text="This is a preview of your text settings. You can see how the font, size, and line spacing look with your current selections."
-                  onWordClick={() => {}}
-                />
-              ) : (
-                <p
-                  style={{
-                    color: settings.fontColor,
-                  }}
-                >
-                  This is a preview of your text settings. You can see how the font,
-                  size, color, and line spacing look with your current selections.
-                </p>
-              )}
-            </div>
+      {/* Fixed Preview Section */}
+      <div 
+        className="border-t-4 border-blue-500 bg-white dark:bg-slate-900 shadow-lg"
+        style={{ 
+          maxHeight: '35vh',
+          minHeight: '120px',
+        }}
+      >
+        <div className="max-w-2xl mx-auto p-4 sm:p-6">
+          <label
+            className="block text-sm sm:text-base font-semibold mb-2"
+            style={{
+              fontFamily: settings.fontFamily,
+              color: getDisplayColor(),
+            }}
+          >
+            Preview
+          </label>
+          <div
+            className="overflow-auto"
+            style={{
+              fontFamily: settings.fontFamily,
+              fontSize: `${settings.fontSize}px`,
+              lineHeight: settings.lineSpacing,
+              backgroundColor: settings.backgroundColor,
+              maxHeight: 'calc(35vh - 80px)',
+              padding: '12px',
+              borderRadius: '8px',
+            }}
+          >
+            {settings.fontColor === "gradient" ? (
+              <GradientReader
+                text="This is a preview of your text settings. You can see how the font, size, and line spacing look with your current selections."
+                onWordClick={() => {}}
+              />
+            ) : (
+              <p
+                style={{
+                  color: settings.fontColor,
+                }}
+              >
+                This is a preview of your text settings. You can see how the font,
+                size, color, and line spacing look with your current selections.
+              </p>
+            )}
           </div>
         </div>
       </div>
