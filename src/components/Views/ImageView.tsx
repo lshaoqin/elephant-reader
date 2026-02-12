@@ -83,12 +83,12 @@ export const ImageView: React.FC<ImageViewProps> = ({
           position: "absolute",
           top: 0,
           left: 0,
-          width: imageScale.width,
-          height: imageScale.height,
+          width: "100%",
+          height: "100%",
           cursor: "pointer",
         }}
-        width={imageScale.width}
-        height={imageScale.height}
+        viewBox={`0 0 ${imageScale.width} ${imageScale.height}`}
+        preserveAspectRatio="none"
       >
         {result.blocks.map((block, index) => {
           const vertices = block.vertices;
@@ -131,12 +131,12 @@ export const ImageView: React.FC<ImageViewProps> = ({
       {/* Image Container */}
       <div className="flex-1 flex items-center justify-center relative bg-black overflow-hidden">
         <div className="relative w-full h-full flex items-center justify-center">
-          <div className="relative" style={{ width: "fit-content", height: "fit-content" }}>
+          <div className="relative inline-block">
             <img
               src={`data:image/jpeg;base64,${result.image_base64}`}
               alt="Uploaded document"
               onLoad={onImageLoad}
-              className="max-w-full max-h-[calc(100vh-120px)] object-contain"
+              className="max-w-full max-h-[calc(100vh-120px)] object-contain block"
               suppressHydrationWarning
             />
             {renderBoundingBoxes()}
