@@ -289,12 +289,32 @@ export const TextView: React.FC<TextViewProps> = ({
           const classes = [
             shouldHighlight && "bg-yellow-300 dark:bg-yellow-500",
             shouldBold && "font-semibold",
+            "cursor-pointer hover:opacity-70 transition-opacity",
           ]
             .filter(Boolean)
             .join(" ");
 
+          // Find the timestamp index for this word
+          const timestampIdx = Array.from(timestampWordMap.entries())
+            .find(([, wordIdx]) => wordIdx === idx)?.[0];
+
           return (
-            <span key={idx} className={classes}>
+            <span 
+              key={idx} 
+              className={classes}
+              onClick={() => {
+                if (timestampIdx !== undefined && wordTimestamps[timestampIdx]) {
+                  const audio = audioRef.current;
+                  if (audio) {
+                    audio.currentTime = wordTimestamps[timestampIdx].start;
+                    // If not playing, start playback
+                    if (!isPlayingAudio) {
+                      onPlayPauseAudio();
+                    }
+                  }
+                }
+              }}
+            >
               {part}
             </span>
           );
