@@ -48,6 +48,19 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
     return `${minutes}:${seconds.toString().padStart(2, "0")}`;
   };
 
+  const handleProgressBarClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const audio = audioRef.current;
+    if (!audio || duration === 0) return;
+
+    const progressBar = e.currentTarget;
+    const rect = progressBar.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const percentage = clickX / rect.width;
+    const newTime = percentage * duration;
+
+    audio.currentTime = newTime;
+  };
+
   const progressPercentage = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   return (
@@ -57,9 +70,12 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
         <span className="text-xs font-medium text-slate-600 dark:text-slate-400 min-w-10">
           {formatTime(currentTime)}
         </span>
-        <div className="flex-1 h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+        <div 
+          className="flex-1 h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden cursor-pointer hover:h-3 transition-all"
+          onClick={handleProgressBarClick}
+        >
           <div
-            className="h-full bg-blue-500 transition-all"
+            className="h-full bg-blue-500 transition-all pointer-events-none"
             style={{ width: `${progressPercentage}%` }}
           />
         </div>
