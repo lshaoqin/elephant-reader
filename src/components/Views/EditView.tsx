@@ -22,6 +22,7 @@ export const EditView: React.FC<EditViewProps> = ({
 }) => {
   const [htmlContent, setHtmlContent] = useState(initialText);
   const [selectedRange, setSelectedRange] = useState<{ start: number; end: number } | null>(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const editorRef = useRef<HTMLDivElement>(null);
 
   // Initialize editor with content and focus
@@ -37,7 +38,9 @@ export const EditView: React.FC<EditViewProps> = ({
 
   const handleInputChange = () => {
     if (editorRef.current) {
-      setHtmlContent(editorRef.current.innerHTML);
+      const newContent = editorRef.current.innerHTML;
+      setHtmlContent(newContent);
+      setHasUnsavedChanges(newContent !== initialText);
     }
   };
 
@@ -68,6 +71,17 @@ export const EditView: React.FC<EditViewProps> = ({
 
   const handleSave = () => {
     onSave(htmlContent);
+    setHasUnsavedChanges(false);
+  };
+
+  const handleBackClick = () => {
+    if (hasUnsavedChanges) {
+      const confirmMessage = "You have unsaved changes. Do you want to save before leaving?";
+      if (window.confirm(confirmMessage)) {
+        handleSave();
+      }
+    }
+    onBackClick();
   };
 
   return (
@@ -76,7 +90,7 @@ export const EditView: React.FC<EditViewProps> = ({
       style={{ backgroundColor: settings.backgroundColor }}
     >
       <div className="lg:border-b-4 lg:border-yellow-500 sticky top-0 z-10">
-        <Header onBackClick={onBackClick} onSettingsClick={onSettingsClick} borderColor="none" />
+        <Header onBackClick={handleBackClick} onSettingsClick={onSettingsClick} borderColor="none" />
       </div>
 
       {/* Formatting toolbar - sticky at top on mobile and tablets */}
