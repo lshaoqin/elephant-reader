@@ -75,12 +75,12 @@ export const EditView: React.FC<EditViewProps> = ({
       className="flex flex-col h-dvh w-screen"
       style={{ backgroundColor: settings.backgroundColor }}
     >
-      <div className="sm:border-b-4 sm:border-yellow-500">
+      <div className="lg:border-b-4 lg:border-yellow-500 sticky top-0 z-10">
         <Header onBackClick={onBackClick} onSettingsClick={onSettingsClick} borderColor="none" />
       </div>
 
-      {/* Formatting toolbar - at top on mobile */}
-      <div className="flex gap-4 p-6 bg-white dark:bg-slate-900 border-b-4 border-yellow-500 flex-wrap justify-center sm:hidden">
+      {/* Formatting toolbar - sticky at top on mobile and tablets */}
+      <div className="sticky top-[64px] z-10 flex gap-4 p-6 bg-white dark:bg-slate-900 border-b-4 border-yellow-500 flex-wrap justify-center lg:hidden">
         <Button
           onClick={handleBold}
           disabled={!selectedRange}
@@ -99,7 +99,7 @@ export const EditView: React.FC<EditViewProps> = ({
       </div>
 
       {/* Content area with editable TextViewBox */}
-      <div className="flex-1 overflow-auto p-6 sm:p-8 lg:p-12 flex flex-col items-start justify-start">
+      <div className="flex-1 overflow-auto p-6 lg:p-8 xl:p-12 flex flex-col items-start justify-start">
         <TextViewBox
           className="outline-none"
           style={{
@@ -130,9 +130,9 @@ export const EditView: React.FC<EditViewProps> = ({
         </TextViewBox>
       </div>
 
-      {/* Formatting toolbar - at bottom on larger screens */}
+      {/* Formatting toolbar - at bottom on large desktop screens only */}
       <div 
-        className="hidden sm:flex gap-4 p-6 bg-white dark:bg-slate-900 border-t-4 border-yellow-500 flex-wrap justify-center transition-all duration-300"
+        className="hidden lg:flex gap-4 p-6 bg-white dark:bg-slate-900 border-t-4 border-yellow-500 flex-wrap justify-center transition-all duration-300"
       >
         <Button
           onClick={handleBold}
