@@ -94,8 +94,8 @@ export const TextView: React.FC<TextViewProps> = ({
     setHasAudioLoaded(false);
   };
 
-  // Build a mapping of timestamp index to word index at the start
-  const buildTimestampWordMap = (text: string): Map<number, number> => {
+  // Build a mapping of timestamp index to word index at the start (memoized)
+  const buildTimestampWordMap = React.useMemo(() => (text: string): Map<number, number> => {
     const map = new Map<number, number>();
     if (!wordTimestamps || wordTimestamps.length === 0) {
       return map;
@@ -143,10 +143,11 @@ export const TextView: React.FC<TextViewProps> = ({
     });
 
     return map;
-  };
+  }, [wordTimestamps]);
 
   // Create a function to parse text with word highlighting
-  const parseTextWithHighlight = (text: string): ReactNode => {
+  // eslint-disable-next-line react/display-name
+  const parseTextWithHighlight = React.useMemo(() => (text: string): ReactNode => {
     if (!wordTimestamps || wordTimestamps.length === 0) {
       // Default mode: Parse HTML and make words clickable for definitions
 
@@ -260,6 +261,14 @@ export const TextView: React.FC<TextViewProps> = ({
     
     // Build the timestamp to word index mapping (using displayText)
     const timestampWordMap = buildTimestampWordMap(displayText);
+    
+    // Build reverse map for faster lookup (word index -> timestamp index)
+    const wordToTimestampMap = new Map<number, number>();
+    timestampWordMap.forEach((wordIdx, tsIdx) => {
+      if (!wordToTimestampMap.has(wordIdx)) {
+        wordToTimestampMap.set(wordIdx, tsIdx);
+      }
+    });
 
     // Find the current timestamp index
     const currentTimestampIdx = wordTimestamps.findIndex(
@@ -289,14 +298,14 @@ export const TextView: React.FC<TextViewProps> = ({
           const classes = [
             shouldHighlight && "bg-yellow-300 dark:bg-yellow-500",
             shouldBold && "font-semibold",
-            "cursor-pointer hover:opacity-70 transition-opacity",
+            "cursor-pointer hover:opacity-70",
+            "transition-all duration-75 ease-in-out",
           ]
             .filter(Boolean)
             .join(" ");
 
-          // Find the timestamp index for this word
-          const timestampIdx = Array.from(timestampWordMap.entries())
-            .find(([, wordIdx]) => wordIdx === idx)?.[0];
+          // Get the timestamp index for this word from reverse map
+          const timestampIdx = wordToTimestampMap.get(idx);
 
           return (
             <span 
@@ -321,7 +330,7 @@ export const TextView: React.FC<TextViewProps> = ({
         })}
       </>
     );
-  };
+  }, [wordTimestamps, currentPlaybackTime, settings.fontColor, isPlayingAudio, audioRef, onPlayPauseAudio, buildTimestampWordMap]);
 
   // Split text into paragraphs, breaking long ones if needed
   const splitIntoParagraphs = (text: string): string[] => {

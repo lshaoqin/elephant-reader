@@ -110,6 +110,7 @@ export default function Page() {
   const [wordTimestamps, setWordTimestamps] = useState<WordTimestamp[]>([]);
   const [currentPlaybackTime, setCurrentPlaybackTime] = useState(0);
   const [settings, setSettings] = useState<TextSettings>(DEFAULT_SETTINGS);
+  const lastHighlightedWordRef = React.useRef<number>(-1);
   const [previousViewMode, setPreviousViewMode] = useState<ViewMode>("upload");
   const audioRef = React.useRef<HTMLAudioElement>(null!);
   const ttsAbortControllerRef = React.useRef<AbortController | null>(null);
@@ -657,7 +658,17 @@ export default function Page() {
         <audio 
           ref={audioRef} 
           onEnded={() => setIsPlayingAudio(false)}
-          onTimeUpdate={(e) => setCurrentPlaybackTime(e.currentTarget.currentTime)}
+          onTimeUpdate={(e) => {
+            const time = e.currentTarget.currentTime;
+            // Only update if the highlighted word has changed
+            const currentWordIdx = wordTimestamps.findIndex(
+              (ts) => time >= ts.start && time < ts.end
+            );
+            if (currentWordIdx !== lastHighlightedWordRef.current) {
+              lastHighlightedWordRef.current = currentWordIdx;
+              setCurrentPlaybackTime(time);
+            }
+          }}
         />
       </div>
     );
