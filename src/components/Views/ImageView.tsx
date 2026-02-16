@@ -31,6 +31,7 @@ interface ImageViewProps {
   onSettingsClick: () => void;
   onImageLoad: (e: React.SyntheticEvent<HTMLImageElement>) => void;
   onBlockClick: (blockIndex: number) => void;
+  onUseFullText?: () => void;
   settings: TextSettings;
   currentPage?: number;
   totalPages?: number;
@@ -48,6 +49,7 @@ export const ImageView: React.FC<ImageViewProps> = ({
   onSettingsClick,
   onImageLoad,
   onBlockClick,
+  onUseFullText,
   settings,
   currentPage = 1,
   totalPages = 1,
@@ -193,7 +195,17 @@ export const ImageView: React.FC<ImageViewProps> = ({
           className="text-base text-gray-600 dark:text-gray-400 text-center font-semibold"
           style={{ fontFamily: "Verdana, Arial, Helvetica, sans-serif" }}
         >
-          Click on a text box to view its content
+          <span>Click on a text box to view its content or </span>
+          {onUseFullText && (
+            <span className="inline-flex items-center whitespace-nowrap">
+              <button
+                onClick={onUseFullText}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold align-middle"
+              >
+                Use Full Text
+              </button>
+            </span>
+          )}
         </p>
       </div>
     </div>

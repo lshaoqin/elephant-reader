@@ -266,23 +266,25 @@ export default function Page() {
     });
   };
 
-  const formatBlockText = async (blockIndex: number) => {
+  const formatText = async (blockIndex: number | null) => {
     if (!result) return;
     
-    const cacheKey = `page-${currentPageIndex}-block-${blockIndex}`;
+    const isFullText = blockIndex === null;
+    const cacheKey = isFullText 
+      ? `page-${currentPageIndex}-full-text`
+      : `page-${currentPageIndex}-block-${blockIndex}`;
     
-    // Check if already formatted
+    // Check if already formatted - can go directly to text view
     if (formattedCache[cacheKey]) {
       setSelectedBlockIndex(blockIndex);
-      // Clear audio cache when selecting new text block
       setCachedAudioUrl(null);
       setCachedAudioKey(null);
       setViewMode("text");
       return;
     }
     
-    // Start formatting
-    setFormattingBlockIndex(blockIndex);
+    // Start formatting - stay on image view with loading overlay
+    setFormattingBlockIndex(isFullText ? -1 : blockIndex);
     
     // Abort any previous formatting request
     if (formattingAbortControllerRef.current) {
@@ -291,7 +293,7 @@ export default function Page() {
     formattingAbortControllerRef.current = new AbortController();
     
     try {
-      const rawText = result.blocks[blockIndex].text;
+      const rawText = isFullText ? result.full_text : result.blocks[blockIndex].text;
       
       const response = await fetch("/api/format-text", {
         signal: formattingAbortControllerRef.current.signal,
@@ -313,22 +315,26 @@ export default function Page() {
         [cacheKey]: data.formatted_text,
       }));
       
+      // Clear formatting state and transition to text view only after success
+      setFormattingBlockIndex(null);
       setSelectedBlockIndex(blockIndex);
-      // Clear audio cache when selecting new text block
       setCachedAudioUrl(null);
       setCachedAudioKey(null);
       setViewMode("text");
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") {
         console.log("Formatting was cancelled");
+        setFormattingBlockIndex(null);
         return;
       }
       const msg = err instanceof Error ? err.message : String(err);
       setError(msg);
-    } finally {
       setFormattingBlockIndex(null);
     }
   };
+
+  const formatBlockText = (blockIndex: number) => formatText(blockIndex);
+  const formatFullText = () => formatText(null);
 
   const handleListen = async () => {
     const audioCacheKey = selectedBlockIndex !== null ? `page-${currentPageIndex}-block-${selectedBlockIndex}` : `page-${currentPageIndex}-full-text`;
@@ -586,6 +592,7 @@ export default function Page() {
         }}
         onImageLoad={handleImageLoad}
         onBlockClick={formatBlockText}
+        onUseFullText={formatFullText}
         onCancelFormatting={handleCancelFormatting}
       />
     );
@@ -593,17 +600,18 @@ export default function Page() {
 
   // Text View
   if (viewMode === "text" && result) {
-    const cacheKey = selectedBlockIndex !== null ? `page-${currentPageIndex}-block-${selectedBlockIndex}` : null;
+    const cacheKey = selectedBlockIndex !== null 
+      ? `page-${currentPageIndex}-block-${selectedBlockIndex}` 
+      : `page-${currentPageIndex}-full-text`;
     const displayText = selectedBlockIndex !== null 
-      ? formattedCache[cacheKey!] || result.blocks[selectedBlockIndex]?.text 
-      : result.full_text;
-    const isFormatting = formattingBlockIndex === selectedBlockIndex;
+      ? formattedCache[cacheKey] || result.blocks[selectedBlockIndex]?.text 
+      : formattedCache[cacheKey] || result.full_text;
 
     return (
       <div>
         <TextView
           displayText={displayText}
-          isFormatting={isFormatting}
+          isFormatting={false}
           isLoadingAudio={isLoadingAudio}
           isPlayingAudio={isPlayingAudio}
           audioRef={audioRef}
