@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { Header, LoadingSpinner } from "@/components";
 import type { TextSettings } from "./SettingsView";
 
@@ -57,6 +57,17 @@ export const ImageView: React.FC<ImageViewProps> = ({
   onPrevPage,
   onCancelFormatting,
 }) => {
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const dragStateRef = useRef({
+    isDragging: false,
+    hasMoved: false,
+    startX: 0,
+    startY: 0,
+    startScrollLeft: 0,
+    startScrollTop: 0,
+  });
+  const suppressBlockClickRef = useRef(false);
+
   // Add keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -75,6 +86,69 @@ export const ImageView: React.FC<ImageViewProps> = ({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [currentPage, totalPages, onNextPage, onPrevPage]);
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    dragStateRef.current.isDragging = true;
+    dragStateRef.current.hasMoved = false;
+    dragStateRef.current.startX = e.clientX;
+    dragStateRef.current.startY = e.clientY;
+    dragStateRef.current.startScrollLeft = container.scrollLeft;
+    dragStateRef.current.startScrollTop = container.scrollTop;
+
+    container.setPointerCapture(e.pointerId);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const container = scrollContainerRef.current;
+    const dragState = dragStateRef.current;
+
+    if (!container || !dragState.isDragging) return;
+
+    const deltaX = e.clientX - dragState.startX;
+    const deltaY = e.clientY - dragState.startY;
+
+    if (!dragState.hasMoved && (Math.abs(deltaX) > 4 || Math.abs(deltaY) > 4)) {
+      dragState.hasMoved = true;
+      suppressBlockClickRef.current = true;
+    }
+
+    if (!dragState.hasMoved) return;
+
+    e.preventDefault();
+    container.scrollLeft = dragState.startScrollLeft - deltaX;
+    container.scrollTop = dragState.startScrollTop - deltaY;
+  };
+
+  const handlePointerEnd = (e: React.PointerEvent<HTMLDivElement>) => {
+    const container = scrollContainerRef.current;
+    const dragState = dragStateRef.current;
+
+    if (!dragState.isDragging) return;
+    dragState.isDragging = false;
+
+    if (container?.hasPointerCapture(e.pointerId)) {
+      container.releasePointerCapture(e.pointerId);
+    }
+
+    const hadMoved = dragState.hasMoved;
+    dragState.hasMoved = false;
+
+    if (hadMoved) {
+      window.setTimeout(() => {
+        suppressBlockClickRef.current = false;
+      }, 0);
+    }
+  };
+
+  const handleBlockClick = (blockIndex: number) => {
+    if (suppressBlockClickRef.current) return;
+    onBlockClick(blockIndex);
+  };
 
   const renderBoundingBoxes = () => {
     if (!result || !imageScale.width || !imageScale.naturalWidth) return null;
@@ -116,7 +190,7 @@ export const ImageView: React.FC<ImageViewProps> = ({
                 }
                 stroke={isSelected ? "#2563eb" : "#ffc107"}
                 strokeWidth="3"
-                onClick={() => onBlockClick(index)}
+                onClick={() => handleBlockClick(index)}
                 style={{ transition: "all 0.2s" }}
               />
             </g>
@@ -131,17 +205,27 @@ export const ImageView: React.FC<ImageViewProps> = ({
       <Header onBackClick={onBackClick} onSettingsClick={onSettingsClick} />
 
       {/* Image Container */}
-      <div className="flex-1 flex items-center justify-center relative bg-black overflow-hidden">
-        <div className="relative w-full h-full flex items-center justify-center">
-          <div className="relative inline-block">
+      <div className="flex-1 relative bg-black overflow-hidden">
+        <div
+          ref={scrollContainerRef}
+          className="w-full h-full overflow-auto cursor-grab active:cursor-grabbing touch-none"
+          style={{ WebkitOverflowScrolling: "touch" }}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerEnd}
+          onPointerCancel={handlePointerEnd}
+        >
+          <div className="min-w-full min-h-full flex items-center justify-center p-2">
+            <div className="relative inline-block">
             <img
               src={`data:image/jpeg;base64,${result.image_base64}`}
               alt="Uploaded document"
               onLoad={onImageLoad}
-              className="max-w-full max-h-[calc(100vh-120px)] object-contain block"
+              className="block w-auto h-auto max-w-none max-h-none"
               suppressHydrationWarning
             />
             {renderBoundingBoxes()}
+            </div>
           </div>
         </div>
 
