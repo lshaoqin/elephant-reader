@@ -19,6 +19,7 @@ interface UploadViewProps {
   onSettingsClick?: () => void;
   loadingFileCount?: number;
   onCancelLoading?: () => void;
+  authSection?: React.ReactNode;
 }
 
 export const UploadView: React.FC<UploadViewProps> = ({
@@ -30,6 +31,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
   onSettingsClick,
   loadingFileCount = 0,
   onCancelLoading,
+  authSection,
 }) => {
   const getFontFamily = () => {
     if (!settings) return "var(--font-geist-sans), sans-serif";
@@ -132,6 +134,11 @@ export const UploadView: React.FC<UploadViewProps> = ({
             </button>
           )}
         </div>
+        {authSection && (
+          <div className="w-full max-w-2xl">
+            {authSection}
+          </div>
+        )}
         {error && (
           <ViewBox variant="error" className="w-full max-w-xl">
             <p

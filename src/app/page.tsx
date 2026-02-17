@@ -159,7 +159,6 @@ export default function Page() {
         if (!response.ok) {
           throw new Error("Failed to establish authenticated session");
         }
-
         setIsAuthenticated(true);
       } catch (authErr) {
         const message = authErr instanceof Error ? authErr.message : String(authErr);

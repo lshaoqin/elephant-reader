@@ -10,6 +10,7 @@ from routes.tts import tts_bp
 from routes.google_tts import google_tts_bp
 from routes.health import health_bp
 from routes.define_word import define_word_bp
+from utils.firebase_auth import log_firebase_credentials_path
 
 
 def create_app():
@@ -19,6 +20,9 @@ def create_app():
         Flask application instance
     """
     app = Flask(__name__)
+
+    # Log Firebase credential path on startup for verification
+    log_firebase_credentials_path()
     
     # Enable CORS
     if CORS_ENABLED:

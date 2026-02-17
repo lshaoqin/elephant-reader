@@ -26,8 +26,22 @@ export async function POST(request: NextRequest) {
     });
 
     return response;
-  } catch {
-    return NextResponse.json({ error: "Invalid token" }, { status: 401 });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Invalid token";
+    const isConfigError =
+      message.includes("Firebase Admin credentials") ||
+      message.includes("project ID") ||
+      message.includes("credential");
+
+    if (isConfigError) {
+      console.error("Firebase Admin config error:", message);
+      return NextResponse.json(
+        { error: "Firebase Admin is not configured correctly" },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ error: message || "Invalid token" }, { status: 401 });
   }
 }
 

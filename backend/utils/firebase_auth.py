@@ -10,6 +10,18 @@ from flask import jsonify, request, g
 firebase_admin_app = None
 
 
+def get_firebase_credentials_path():
+    """Resolve Firebase credentials path from environment variables."""
+    return os.getenv("FIREBASE_ADMIN_CREDENTIALS") or os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+
+
+def log_firebase_credentials_path():
+    """Print Firebase credentials path at startup for debugging."""
+    credentials_path = get_firebase_credentials_path()
+    print(f"[Firebase Auth] credentials_path={credentials_path}")
+    return credentials_path
+
+
 def _initialize_firebase_admin():
     """Initialize Firebase Admin app if needed."""
     global firebase_admin_app
@@ -21,8 +33,7 @@ def _initialize_firebase_admin():
         firebase_admin_app = firebase_admin.get_app()
         return firebase_admin_app
 
-    credentials_path = os.getenv("FIREBASE_ADMIN_CREDENTIALS") or os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
-
+    credentials_path = get_firebase_credentials_path()
     if credentials_path and os.path.exists(credentials_path):
         cred = credentials.Certificate(credentials_path)
         firebase_admin_app = firebase_admin.initialize_app(cred)
