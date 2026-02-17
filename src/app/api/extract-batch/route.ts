@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireFirebaseAuth } from "@/utils/require-firebase-auth";
 
 export const runtime = "nodejs";
 export const maxDuration = 60; // Allow up to 60 seconds for batch processing
@@ -7,6 +8,9 @@ const MAX_FILES = 20;
 
 export async function POST(req: Request) {
   try {
+    const authResult = await requireFirebaseAuth(req);
+    if (authResult instanceof NextResponse) return authResult;
+
     const form = await req.formData();
     const files = form.getAll("files") as File[];
     
@@ -32,6 +36,9 @@ export async function POST(req: Request) {
     try {
       const response = await fetch(`${backendUrl}/extract-batch`, {
         method: "POST",
+        headers: {
+          Authorization: `Bearer ${authResult.token}`,
+        },
         body: formData,
       });
 

@@ -3,6 +3,10 @@
 import React, { useState, ReactNode, useEffect } from "react";
 import { UploadView, ImageView, TextView, SettingsView, EditView, ReadingView } from "@/components/Views";
 import type { TextSettings } from "@/components/Views/SettingsView";
+import PhoneAuthView from "@/components/Auth/PhoneAuthView";
+import { getFirebaseAuth } from "@/utils/firebase-client";
+import { onIdTokenChanged } from "firebase/auth";
+import type { User } from "firebase/auth";
 
 interface TextBlock {
   text: string;
@@ -91,6 +95,8 @@ function saveSettingsToCookie(settings: TextSettings) {
 }
 
 export default function Page() {
+  const [authLoading, setAuthLoading] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [results, setResults] = useState<ExtractionResult[]>([]);
   const [currentPageIndex, setCurrentPageIndex] = useState<number>(0);
   const [loading, setLoading] = useState(false);
@@ -124,6 +130,47 @@ export default function Page() {
   useEffect(() => {
     const savedSettings = loadSettingsFromCookie();
     setSettings(savedSettings);
+  }, []);
+
+  useEffect(() => {
+    const auth = getFirebaseAuth();
+    if (!auth) {
+      setError("Firebase Auth is not configured. Please set Firebase environment variables.");
+      setAuthLoading(false);
+      return;
+    }
+
+    const unsubscribe = onIdTokenChanged(auth, async (user: User | null) => {
+      if (!user) {
+        setIsAuthenticated(false);
+        await fetch("/api/auth/session", { method: "DELETE" });
+        setAuthLoading(false);
+        return;
+      }
+
+      try {
+        const idToken = await user.getIdToken();
+        const response = await fetch("/api/auth/session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ idToken }),
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to establish authenticated session");
+        }
+
+        setIsAuthenticated(true);
+      } catch (authErr) {
+        const message = authErr instanceof Error ? authErr.message : String(authErr);
+        setError(message);
+        setIsAuthenticated(false);
+      } finally {
+        setAuthLoading(false);
+      }
+    });
+
+    return () => unsubscribe();
   }, []);
 
   // Save settings to cookie whenever they change
@@ -494,6 +541,18 @@ export default function Page() {
     }
     setFormattingBlockIndex(null);
   };
+
+  if (authLoading) {
+    return (
+      <div className="flex min-h-screen w-screen items-center justify-center bg-white dark:bg-slate-950">
+        <p className="text-lg font-semibold text-blue-600">Checking authentication...</p>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <PhoneAuthView onAuthenticated={() => setIsAuthenticated(true)} />;
+  }
 
   // Upload View
   if (viewMode === "upload") {

@@ -3,6 +3,7 @@ import tempfile
 from pathlib import Path
 from flask import request, jsonify, Blueprint
 from google.cloud import vision
+from utils.firebase_auth import require_firebase_auth
 import os
 import base64
 from pdf2image import convert_from_path
@@ -119,6 +120,7 @@ def convert_pdf_to_images(pdf_path):
 
 
 @extract_pdf_bp.route('/extract-pdf', methods=['POST'])
+@require_firebase_auth
 def extract_pdf():
     """Handle PDF file upload and extract text with bounding boxes from each page."""
     try:

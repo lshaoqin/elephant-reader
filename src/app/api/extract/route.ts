@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
+import { requireFirebaseAuth } from "@/utils/require-firebase-auth";
 
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
   try {
+    const authResult = await requireFirebaseAuth(req);
+    if (authResult instanceof NextResponse) return authResult;
+
     const form = await req.formData();
     const file = form.get("file") as File | null;
     if (!file) {
@@ -19,6 +23,9 @@ export async function POST(req: Request) {
     try {
       const response = await fetch(`${backendUrl}/extract`, {
         method: "POST",
+        headers: {
+          Authorization: `Bearer ${authResult.token}`,
+        },
         body: formData,
       });
 

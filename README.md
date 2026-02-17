@@ -60,12 +60,29 @@ npm install
 yarn install
 ```
 
-2. Create a `.env.local` file in the root directory (optional, if backend is not on localhost:5000):
+2. Create a `.env.local` file in the root directory:
 ```env
-NEXT_PUBLIC_PYTHON_BACKEND_URL=http://localhost:5000
+PYTHON_BACKEND_URL=http://localhost:8080
+
+# Firebase client config (from Firebase Console → Project settings → General)
+NEXT_PUBLIC_FIREBASE_API_KEY=your_firebase_web_api_key
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your-project-id.firebaseapp.com
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=your-project-id
+NEXT_PUBLIC_FIREBASE_APP_ID=1:1234567890:web:abcdef123456
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=1234567890
+
+# Firebase Admin config used by Next.js API routes
+FIREBASE_PROJECT_ID=your-project-id
+FIREBASE_CLIENT_EMAIL=firebase-adminsdk-xxxxx@your-project-id.iam.gserviceaccount.com
+FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nYOUR_PRIVATE_KEY_LINE_1\nYOUR_PRIVATE_KEY_LINE_2\n-----END PRIVATE KEY-----\n"
 ```
 
-3. Run the development server:
+3. In Firebase Console:
+	- Enable **Authentication → Sign-in method → Phone**
+	- Add `localhost` to authorized domains
+	- Add test phone numbers for local development
+
+4. Run the development server:
 ```bash
 npm run dev
 # or

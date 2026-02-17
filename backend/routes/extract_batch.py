@@ -3,6 +3,7 @@ import tempfile
 from pathlib import Path
 from flask import request, jsonify, Blueprint
 from services.vision_service import extract_text_with_boxes
+from utils.firebase_auth import require_firebase_auth
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -36,6 +37,7 @@ def process_single_file(file_data, filename):
 
 
 @extract_batch_bp.route('/extract-batch', methods=['POST'])
+@require_firebase_auth
 def extract_batch():
     """Handle multiple file uploads and extract text with bounding boxes from all images."""
     try:

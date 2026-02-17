@@ -3,6 +3,7 @@ from flask import request, jsonify, Blueprint
 import requests
 import string
 from pyphen import Pyphen
+from utils.firebase_auth import require_firebase_auth
 
 define_word_bp = Blueprint('define_word', __name__)
 
@@ -120,6 +121,7 @@ def fetch_definition(word: str) -> tuple:
 
 
 @define_word_bp.route('/define-word', methods=['POST'])
+@require_firebase_auth
 def define_word():
     """Fetch word definition from Dictionary API.
     

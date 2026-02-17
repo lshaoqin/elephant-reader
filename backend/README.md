@@ -37,6 +37,11 @@ pip install -r requirements.txt
 copy .env.example .env
 ```
 
+5. Configure Firebase Admin for protected endpoints (`/extract`, `/format-text`, `/tts`, etc.):
+  - Option A (recommended): set `FIREBASE_ADMIN_CREDENTIALS` to your Firebase service-account JSON path.
+  - Option B: set `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, and `FIREBASE_PRIVATE_KEY` directly.
+  - Keep `GOOGLE_APPLICATION_CREDENTIALS` for Google Vision/TTS credentials.
+
 ## Running the Backend
 
 ```bash

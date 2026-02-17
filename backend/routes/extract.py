@@ -3,12 +3,14 @@ import tempfile
 from pathlib import Path
 from flask import request, jsonify, Blueprint
 from services.vision_service import extract_text_with_boxes
+from utils.firebase_auth import require_firebase_auth
 import os
 
 extract_bp = Blueprint('extract', __name__)
 
 
 @extract_bp.route('/extract', methods=['POST'])
+@require_firebase_auth
 def extract():
     """Handle file upload and extract text with bounding boxes from image."""
     try:

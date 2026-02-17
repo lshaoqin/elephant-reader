@@ -6,12 +6,14 @@ import numpy as np
 from flask import request, jsonify, Blueprint, stream_with_context, current_app
 from services.tts_service import generate_speech
 from utils.audio_utils import audio_to_base64
+from utils.firebase_auth import require_firebase_auth
 from config import TTS_SAMPLE_RATE
 
 tts_bp = Blueprint('tts', __name__)
 
 
 @tts_bp.route('/tts', methods=['POST'])
+@require_firebase_auth
 def text_to_speech():
     """Convert text to speech using Kokoro TTS and align with Montreal Forced Aligner.
     
