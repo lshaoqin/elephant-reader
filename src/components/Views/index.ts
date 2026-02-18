@@ -1,4 +1,5 @@
 export { UploadView } from "./UploadView";
+export { SavedFilesView } from "./SavedFilesView";
 export { ImageView } from "./ImageView";
 export { TextView } from "./TextView";
 export { SettingsView } from "./SettingsView";

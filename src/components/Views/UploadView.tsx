@@ -15,6 +15,7 @@ interface UploadViewProps {
   error: string | null;
   onFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onWriteTextClick: () => void;
+  onMyFilesClick?: () => void;
   settings?: TextSettings;
   onSettingsClick?: () => void;
   loadingFileCount?: number;
@@ -27,6 +28,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
   error,
   onFileChange,
   onWriteTextClick,
+  onMyFilesClick,
   settings,
   onSettingsClick,
   loadingFileCount = 0,
@@ -118,6 +120,21 @@ export const UploadView: React.FC<UploadViewProps> = ({
               Write text instead
             </span>
           </button>
+          {onMyFilesClick && (
+            <button
+              onClick={onMyFilesClick}
+              disabled={loading}
+              className="flex flex-row items-center justify-center gap-3 px-8 py-4 border-2 border-blue-400 rounded-lg cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-950 transition-colors w-full max-w-md disabled:cursor-not-allowed"
+            >
+              <UploadIcon className="w-6 h-6 text-blue-600 transition-colors" />
+              <span
+                className="font-semibold text-base text-blue-600 dark:text-blue-400"
+                style={{ fontFamily: getFontFamily() }}
+              >
+                My Files
+              </span>
+            </button>
+          )}
           {onSettingsClick && (
             <button
               onClick={onSettingsClick}

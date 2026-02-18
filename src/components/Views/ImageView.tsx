@@ -99,8 +99,6 @@ export const ImageView: React.FC<ImageViewProps> = ({
     dragStateRef.current.startY = e.clientY;
     dragStateRef.current.startScrollLeft = container.scrollLeft;
     dragStateRef.current.startScrollTop = container.scrollTop;
-
-    container.setPointerCapture(e.pointerId);
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -125,15 +123,10 @@ export const ImageView: React.FC<ImageViewProps> = ({
   };
 
   const handlePointerEnd = (e: React.PointerEvent<HTMLDivElement>) => {
-    const container = scrollContainerRef.current;
     const dragState = dragStateRef.current;
 
     if (!dragState.isDragging) return;
     dragState.isDragging = false;
-
-    if (container?.hasPointerCapture(e.pointerId)) {
-      container.releasePointerCapture(e.pointerId);
-    }
 
     const hadMoved = dragState.hasMoved;
     dragState.hasMoved = false;

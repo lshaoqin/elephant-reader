@@ -1,12 +1,19 @@
 "use client";
 
 import React, { useState, ReactNode, useEffect } from "react";
-import { UploadView, ImageView, TextView, SettingsView, EditView, ReadingView } from "@/components/Views";
+import { UploadView, SavedFilesView, ImageView, TextView, SettingsView, EditView, ReadingView } from "@/components/Views";
 import type { TextSettings } from "@/components/Views/SettingsView";
 import PhoneAuthView from "@/components/Auth/PhoneAuthView";
 import { getFirebaseAuth } from "@/utils/firebase-client";
 import { onIdTokenChanged } from "firebase/auth";
 import type { User } from "firebase/auth";
+import {
+  listUserDocuments,
+  loadUserDocument,
+  saveUserDocument,
+  type SavedAudioEntry,
+  type SavedDocumentSummary,
+} from "@/utils/firebase-user-files";
 
 interface TextBlock {
   text: string;
@@ -32,7 +39,7 @@ interface WordTimestamp {
   end: number;
 }
 
-type ViewMode = "upload" | "image" | "text" | "settings" | "edit" | "reading";
+type ViewMode = "upload" | "saved-files" | "image" | "text" | "settings" | "edit" | "reading";
 
 
 // Function to parse markdown formatting (**text** -> bold)
@@ -95,8 +102,14 @@ function saveSettingsToCookie(settings: TextSettings) {
 }
 
 export default function Page() {
+  const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [savedFiles, setSavedFiles] = useState<SavedDocumentSummary[]>([]);
+  const [savedFilesLoading, setSavedFilesLoading] = useState(false);
+  const [savingDocument, setSavingDocument] = useState(false);
+  const [activeSavedDocumentId, setActiveSavedDocumentId] = useState<string | null>(null);
+  const [audioCacheStore, setAudioCacheStore] = useState<Record<string, SavedAudioEntry>>({});
   const [results, setResults] = useState<ExtractionResult[]>([]);
   const [currentPageIndex, setCurrentPageIndex] = useState<number>(0);
   const [loading, setLoading] = useState(false);
@@ -109,6 +122,7 @@ export default function Page() {
   const [viewMode, setViewMode] = useState<ViewMode>("upload");
   const [formattingBlockIndex, setFormattingBlockIndex] = useState<number | null>(null);
   const [formattedCache, setFormattedCache] = useState<Record<string, string>>({});
+  const [formattedState, setFormattedState] = useState<Record<string, boolean>>({});
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [isLoadingAudio, setIsLoadingAudio] = useState(false);
   const [cachedAudioUrl, setCachedAudioUrl] = useState<string | null>(null);
@@ -142,6 +156,7 @@ export default function Page() {
 
     const unsubscribe = onIdTokenChanged(auth, async (user: User | null) => {
       if (!user) {
+        setFirebaseUser(null);
         setIsAuthenticated(false);
         await fetch("/api/auth/session", { method: "DELETE" });
         setAuthLoading(false);
@@ -159,6 +174,7 @@ export default function Page() {
         if (!response.ok) {
           throw new Error("Failed to establish authenticated session");
         }
+        setFirebaseUser(user);
         setIsAuthenticated(true);
       } catch (authErr) {
         const message = authErr instanceof Error ? authErr.message : String(authErr);
@@ -177,6 +193,175 @@ export default function Page() {
     saveSettingsToCookie(settings);
   }, [settings]);
 
+  const isAuthError = (value: unknown) => {
+    const message = value instanceof Error ? value.message : String(value || "");
+    const normalized = message.toLowerCase();
+    return (
+      normalized.includes("invalid or expired token") ||
+      normalized.includes("unauthorized") ||
+      normalized.includes("401")
+    );
+  };
+
+  const refreshAuthSession = async () => {
+    const auth = getFirebaseAuth();
+    const user = auth?.currentUser;
+    if (!user) return false;
+
+    try {
+      const idToken = await user.getIdToken(true);
+      const response = await fetch("/api/auth/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idToken }),
+      });
+      return response.ok;
+    } catch {
+      return false;
+    }
+  };
+
+  const handleAuthExpired = async () => {
+    const auth = getFirebaseAuth();
+    try {
+      await fetch("/api/auth/session", { method: "DELETE" });
+      await auth?.signOut();
+    } catch {
+      // ignore cleanup failures
+    }
+
+    setFirebaseUser(null);
+    setIsAuthenticated(false);
+    setActiveSavedDocumentId(null);
+    setAudioCacheStore({});
+    setFormattedCache({});
+    setFormattedState({});
+    setResults([]);
+    setSavedFiles([]);
+    setViewMode("upload");
+    setError("Session expired. Please sign in again.");
+  };
+
+  const withAuthRetry = async <T,>(action: () => Promise<T>): Promise<T> => {
+    try {
+      return await action();
+    } catch (err) {
+      if (!isAuthError(err)) throw err;
+
+      const refreshed = await refreshAuthSession();
+      if (refreshed) {
+        return await action();
+      }
+
+      await handleAuthExpired();
+      throw new Error("Session expired. Please sign in again.");
+    }
+  };
+
+  const handleOpenSavedFiles = async () => {
+    if (!firebaseUser) return;
+
+    setViewMode("saved-files");
+    setSavedFilesLoading(true);
+    setError(null);
+
+    try {
+      const items = await withAuthRetry(() => listUserDocuments());
+      setSavedFiles(items);
+    } catch (loadErr) {
+      const message = loadErr instanceof Error ? loadErr.message : String(loadErr);
+      setError(message);
+    } finally {
+      setSavedFilesLoading(false);
+    }
+  };
+
+  const handleLoadSavedFile = async (documentId: string) => {
+    if (!firebaseUser) return;
+
+    setSavedFilesLoading(true);
+    setError(null);
+
+    try {
+      const payload = await withAuthRetry(() =>
+        loadUserDocument({
+          documentId,
+        })
+      );
+
+      setResults(payload.results);
+      setFormattedCache(payload.formattedCache || {});
+      setFormattedState(
+        payload.formattedState ||
+          Object.keys(payload.formattedCache || {}).reduce((acc, key) => {
+            acc[key] = true;
+            return acc;
+          }, {} as Record<string, boolean>)
+      );
+      setAudioCacheStore(payload.audioCache || {});
+      setCurrentPageIndex(payload.currentPageIndex || 0);
+      setSelectedBlockIndex(payload.selectedBlockIndex ?? null);
+      setCachedAudioUrl(null);
+      setCachedAudioKey(null);
+      setWordTimestamps([]);
+      setCurrentPlaybackTime(0);
+      setImageScale({ width: 0, height: 0 });
+      setActiveSavedDocumentId(documentId);
+      setViewMode("image");
+    } catch (loadErr) {
+      const message = loadErr instanceof Error ? loadErr.message : String(loadErr);
+      setError(message);
+    } finally {
+      setSavedFilesLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!isAuthenticated || !firebaseUser || results.length === 0) {
+      return;
+    }
+
+    const autosaveTimeout = window.setTimeout(async () => {
+      try {
+        setSavingDocument(true);
+
+        const documentId = await withAuthRetry(() =>
+          saveUserDocument({
+            existingDocumentId: activeSavedDocumentId,
+            title: results[0]?.full_text?.slice(0, 50)?.trim() || "Saved file",
+            payload: {
+              results,
+              formattedCache,
+              formattedState,
+              audioCache: audioCacheStore,
+              currentPageIndex,
+              selectedBlockIndex,
+              savedAt: new Date().toISOString(),
+            },
+          })
+        );
+
+        setActiveSavedDocumentId(documentId);
+      } catch (saveErr) {
+        console.error("Auto-save failed:", saveErr);
+      } finally {
+        setSavingDocument(false);
+      }
+    }, 1200);
+
+    return () => window.clearTimeout(autosaveTimeout);
+  }, [
+    isAuthenticated,
+    firebaseUser,
+    results,
+    formattedCache,
+    formattedState,
+    audioCacheStore,
+    currentPageIndex,
+    selectedBlockIndex,
+    activeSavedDocumentId,
+  ]);
+
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const files = e.target.files;
     if (!files || files.length === 0) return;
@@ -194,6 +379,9 @@ export default function Page() {
     setCurrentPageIndex(0);
     setSelectedBlockIndex(null);
     setViewMode("upload");
+    setActiveSavedDocumentId(null);
+    setAudioCacheStore({});
+    setFormattedState({});
 
     // Abort any previous extraction request
     if (extractionAbortControllerRef.current) {
@@ -220,11 +408,14 @@ export default function Page() {
           formData.append("files", files[i]);
         }
 
-        const res = await fetch("/api/extract-batch", {
-          signal: extractionAbortControllerRef.current.signal,
-          method: "POST",
-          body: formData,
-        });
+        const extractionSignal = extractionAbortControllerRef.current?.signal;
+        const res = await withAuthRetry(() =>
+          fetch("/api/extract-batch", {
+            signal: extractionSignal,
+            method: "POST",
+            body: formData,
+          })
+        );
 
         if (!res.ok) {
           const errorData = await res.json();
@@ -256,11 +447,14 @@ export default function Page() {
 
         const endpoint = isPdf ? "/api/extract-pdf" : "/api/extract";
 
-        const res = await fetch(endpoint, {
-          signal: extractionAbortControllerRef.current.signal,
-          method: "POST",
-          body: form,
-        });
+        const extractionSignal = extractionAbortControllerRef.current?.signal;
+        const res = await withAuthRetry(() =>
+          fetch(endpoint, {
+            signal: extractionSignal,
+            method: "POST",
+            body: form,
+          })
+        );
 
         if (!res.ok) {
           const text = await res.text();
@@ -321,7 +515,7 @@ export default function Page() {
       : `page-${currentPageIndex}-block-${blockIndex}`;
     
     // Check if already formatted - can go directly to text view
-    if (formattedCache[cacheKey]) {
+    if (formattedState[cacheKey] && formattedCache[cacheKey]) {
       setSelectedBlockIndex(blockIndex);
       setCachedAudioUrl(null);
       setCachedAudioKey(null);
@@ -341,12 +535,15 @@ export default function Page() {
     try {
       const rawText = isFullText ? result.full_text : result.blocks[blockIndex].text;
       
-      const response = await fetch("/api/format-text", {
-        signal: formattingAbortControllerRef.current.signal,
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: rawText }),
-      });
+      const formattingSignal = formattingAbortControllerRef.current?.signal;
+      const response = await withAuthRetry(() =>
+        fetch("/api/format-text", {
+          signal: formattingSignal,
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: rawText }),
+        })
+      );
       
       if (!response.ok) {
         const error = await response.json();
@@ -359,6 +556,10 @@ export default function Page() {
       setFormattedCache((prev) => ({
         ...prev,
         [cacheKey]: data.formatted_text,
+      }));
+      setFormattedState((prev) => ({
+        ...prev,
+        [cacheKey]: true,
       }));
       
       // Clear formatting state and transition to text view only after success
@@ -405,6 +606,28 @@ export default function Page() {
       return;
     }
 
+    const cachedEntry = audioCacheStore[audioCacheKey];
+    if (cachedEntry && cachedEntry.audioBase64) {
+      const binaryString = atob(cachedEntry.audioBase64);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      const audioBlob = new Blob([bytes], { type: "audio/wav" });
+      const audioUrl = URL.createObjectURL(audioBlob);
+
+      setCachedAudioUrl(audioUrl);
+      setCachedAudioKey(audioCacheKey);
+      setWordTimestamps(cachedEntry.timestamps || []);
+
+      if (audioRef.current) {
+        audioRef.current.src = audioUrl;
+        audioRef.current.play();
+        setIsPlayingAudio(true);
+      }
+      return;
+    }
+
     // Load audio from API with streaming
     setIsLoadingAudio(true);
     setError(null);
@@ -419,12 +642,15 @@ export default function Page() {
       // Remove HTML tags before sending to TTS
       const plainText = displayText.replace(/<[^>]*>/g, "");
       
-      const response = await fetch("/api/tts/google", {
-        signal: ttsAbortControllerRef.current.signal,
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: plainText }),
-      });
+      const ttsSignal = ttsAbortControllerRef.current?.signal;
+      const response = await withAuthRetry(() =>
+        fetch("/api/tts/google", {
+          signal: ttsSignal,
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: plainText }),
+        })
+      );
 
       if (!response.ok) {
         throw new Error("Failed to generate audio");
@@ -471,6 +697,15 @@ export default function Page() {
                 // Cache the audio URL
                 setCachedAudioUrl(audioUrl);
                 setCachedAudioKey(audioCacheKey);
+
+                setAudioCacheStore((prev) => ({
+                  ...prev,
+                  [audioCacheKey]: {
+                    audioBase64: data.audio,
+                    timestamps: data.timestamps || [],
+                    sampleRate: data.sample_rate,
+                  },
+                }));
 
                 // Store word timestamps if available
                 if (data.timestamps) {
@@ -561,6 +796,7 @@ export default function Page() {
         error={error}
         onFileChange={handleFileChange}
         loadingFileCount={loadingFileCount}
+        onMyFilesClick={handleOpenSavedFiles}
         onWriteTextClick={() => {
           // Set up a minimal result structure to enable EditView
           setResults([{
@@ -570,12 +806,40 @@ export default function Page() {
           }]);
           setCurrentPageIndex(0);
           setSelectedBlockIndex(0);
+          setActiveSavedDocumentId(null);
+          setAudioCacheStore({});
           setFormattedCache({ "page-0-block-0": "" });
+          setFormattedState({ "page-0-block-0": true });
           setViewMode("edit");
         }}
         settings={settings}
         onSettingsClick={() => setViewMode("settings")}
         onCancelLoading={handleCancelLoading}
+        authSection={
+          firebaseUser?.phoneNumber ? (
+            <p className="text-sm text-blue-700 dark:text-blue-300 text-center font-semibold">
+              Signed in as {firebaseUser.phoneNumber}
+              {savingDocument ? " • Saving file..." : ""}
+            </p>
+          ) : null
+        }
+      />
+    );
+  }
+
+  if (viewMode === "saved-files") {
+    return (
+      <SavedFilesView
+        files={savedFiles}
+        loading={savedFilesLoading}
+        phoneNumber={firebaseUser?.phoneNumber || undefined}
+        settings={settings}
+        onBackClick={() => setViewMode("upload")}
+        onSettingsClick={() => {
+          setPreviousViewMode("saved-files");
+          setViewMode("settings");
+        }}
+        onOpenFile={handleLoadSavedFile}
       />
     );
   }
@@ -606,12 +870,6 @@ export default function Page() {
           }
         }}
         onBackClick={() => {
-          // Warn user before losing document
-          const confirmed = window.confirm(
-            "You will lose your document if you go back. Are you sure you want to continue?"
-          );
-          if (!confirmed) return;
-          
           // Abort any ongoing requests
           if (ttsAbortControllerRef.current) {
             ttsAbortControllerRef.current.abort();
@@ -626,6 +884,9 @@ export default function Page() {
           setSelectedBlockIndex(null);
           setImageScale({ width: 0, height: 0 });
           setFormattedCache({});
+          setFormattedState({});
+          setAudioCacheStore({});
+          setActiveSavedDocumentId(null);
           setFormattingBlockIndex(null);
           setCachedAudioUrl(null);
           setCachedAudioKey(null);
@@ -700,6 +961,11 @@ export default function Page() {
             setIsLoadingAudio(false);
             setCachedAudioUrl(null);
             setCachedAudioKey(null);
+            if (goingToUpload) {
+              setFormattedState({});
+              setAudioCacheStore({});
+              setActiveSavedDocumentId(null);
+            }
             // If there's no image (user wrote text directly), go to upload view
             setViewMode(result?.image_base64 ? "image" : "upload");
             setWordTimestamps([]);
@@ -761,12 +1027,26 @@ export default function Page() {
     const handleEditSave = (editedText: string) => {
       // Update the formatted cache with the edited text
       if (selectedBlockIndex !== null) {
+        const editedCacheKey = `page-${currentPageIndex}-block-${selectedBlockIndex}`;
         setFormattedCache((prev) => ({
           ...prev,
-          [`page-${currentPageIndex}-block-${selectedBlockIndex}`]: editedText,
+          [editedCacheKey]: editedText,
+        }));
+        setFormattedState((prev) => ({
+          ...prev,
+          [editedCacheKey]: true,
         }));
       } else {
         // For full text, we need to update the result's full_text
+        const editedCacheKey = `page-${currentPageIndex}-full-text`;
+        setFormattedCache((prev) => ({
+          ...prev,
+          [editedCacheKey]: editedText,
+        }));
+        setFormattedState((prev) => ({
+          ...prev,
+          [editedCacheKey]: true,
+        }));
         setResults((prev) => {
           if (!prev || prev.length === 0) return prev;
           const updated = [...prev];
