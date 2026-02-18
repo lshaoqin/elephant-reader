@@ -107,6 +107,7 @@ export default function Page() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [savedFiles, setSavedFiles] = useState<SavedDocumentSummary[]>([]);
   const [savedFilesLoading, setSavedFilesLoading] = useState(false);
+  const [openingSavedDocumentId, setOpeningSavedDocumentId] = useState<string | null>(null);
   const [savingDocument, setSavingDocument] = useState(false);
   const [activeSavedDocumentId, setActiveSavedDocumentId] = useState<string | null>(null);
   const [audioCacheStore, setAudioCacheStore] = useState<Record<string, SavedAudioEntry>>({});
@@ -277,9 +278,9 @@ export default function Page() {
   };
 
   const handleLoadSavedFile = async (documentId: string) => {
-    if (!firebaseUser) return;
+    if (!firebaseUser || openingSavedDocumentId) return;
 
-    setSavedFilesLoading(true);
+    setOpeningSavedDocumentId(documentId);
     setError(null);
 
     try {
@@ -312,7 +313,7 @@ export default function Page() {
       const message = loadErr instanceof Error ? loadErr.message : String(loadErr);
       setError(message);
     } finally {
-      setSavedFilesLoading(false);
+      setOpeningSavedDocumentId(null);
     }
   };
 
@@ -832,6 +833,7 @@ export default function Page() {
       <SavedFilesView
         files={savedFiles}
         loading={savedFilesLoading}
+        openingDocumentId={openingSavedDocumentId}
         phoneNumber={firebaseUser?.phoneNumber || undefined}
         settings={settings}
         onBackClick={() => setViewMode("upload")}

@@ -71,14 +71,21 @@ export async function listUserDocuments(): Promise<SavedDocumentSummary[]> {
     throw new Error(data.error || "Failed to load saved files");
   }
 
-  const documents = (data.documents || []) as Array<SavedDocumentSummary & { hasPreview?: boolean }>;
+  const documents = (data.documents || []) as Array<
+    SavedDocumentSummary & { hasPreview?: boolean; previewImageUrl?: string | null }
+  >;
   return documents.map((item) => ({
     id: item.id,
     title: item.title,
     pageCount: item.pageCount,
     phoneNumber: item.phoneNumber,
     updatedAtMs: item.updatedAtMs,
-    previewImageUrl: item.hasPreview ? `/api/user-files/${item.id}/preview` : undefined,
+    previewImageUrl:
+      item.previewImageUrl
+        ? `${item.previewImageUrl}?v=${item.updatedAtMs}`
+        : item.hasPreview
+          ? `/api/user-files/${item.id}/preview?v=${item.updatedAtMs}`
+          : undefined,
   }));
 }
 

@@ -179,13 +179,30 @@ def load_user_file_preview(document_id: str):
 
     metadata = document_snapshot.to_dict() or {}
     preview_path = metadata.get("previewPath")
-    if not preview_path:
-        return jsonify({"error": "Preview not found"}), 404
-
     bucket = _get_bucket()
-    blob = bucket.blob(preview_path)
-    if not blob.exists():
+
+    if preview_path:
+        blob = bucket.blob(preview_path)
+        if blob.exists():
+            image_bytes = blob.download_as_bytes()
+            return Response(image_bytes, mimetype="image/jpeg")
+
+    data_path = metadata.get("dataPath")
+    if not data_path:
         return jsonify({"error": "Preview not found"}), 404
 
-    image_bytes = blob.download_as_bytes()
-    return Response(image_bytes, mimetype="image/jpeg")
+    try:
+        payload_text = bucket.blob(data_path).download_as_text()
+        payload = json.loads(payload_text)
+        results = payload.get("results") or []
+        first_page = results[0] if results and isinstance(results[0], dict) else {}
+        image_base64 = first_page.get("image_base64")
+
+        if isinstance(image_base64, str) and image_base64.strip():
+            raw_base64 = image_base64.split(",", 1)[1] if "," in image_base64 else image_base64
+            image_bytes = base64.b64decode(raw_base64)
+            return Response(image_bytes, mimetype="image/jpeg")
+    except Exception:
+        pass
+
+    return jsonify({"error": "Preview not found"}), 404

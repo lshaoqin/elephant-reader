@@ -17,7 +17,23 @@ export async function GET(req: NextRequest) {
   });
 
   const data = await response.json().catch(() => ({}));
-  return NextResponse.json(data, { status: response.status });
+
+  if (!response.ok) {
+    return NextResponse.json(data, { status: response.status });
+  }
+
+  const documents = Array.isArray(data.documents)
+    ? data.documents.map((item: Record<string, unknown>) => {
+        const id = String(item.id || "");
+        const hasPreview = Boolean(item.hasPreview);
+        return {
+          ...item,
+          previewImageUrl: hasPreview && id ? `/api/user-files/${id}/preview` : null,
+        };
+      })
+    : [];
+
+  return NextResponse.json({ ...data, documents }, { status: response.status });
 }
 
 export async function POST(req: NextRequest) {
