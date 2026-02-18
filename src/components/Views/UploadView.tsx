@@ -4,6 +4,7 @@ import React from "react";
 import {
   CameraIcon,
   UploadIcon,
+  FileTextIcon,
   Pencil2Icon,
   GearIcon,
 } from "@radix-ui/react-icons";
@@ -126,7 +127,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
               disabled={loading}
               className="flex flex-row items-center justify-center gap-3 px-8 py-4 border-2 border-blue-400 rounded-lg cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-950 transition-colors w-full max-w-md disabled:cursor-not-allowed"
             >
-              <UploadIcon className="w-6 h-6 text-blue-600 transition-colors" />
+              <FileTextIcon className="w-6 h-6 text-blue-600 transition-colors" />
               <span
                 className="font-semibold text-base text-blue-600 dark:text-blue-400"
                 style={{ fontFamily: getFontFamily() }}
