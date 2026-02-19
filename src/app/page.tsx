@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, ReactNode, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { UploadView, SavedFilesView, ImageView, TextView, SettingsView, EditView, ReadingView } from "@/components/Views";
 import type { TextSettings } from "@/components/Views/SettingsView";
 import PhoneAuthView from "@/components/Auth/PhoneAuthView";
@@ -41,34 +41,6 @@ interface WordTimestamp {
 
 type ViewMode = "upload" | "saved-files" | "image" | "text" | "settings" | "edit" | "reading";
 
-
-// Function to parse markdown formatting (**text** -> bold)
-function parseHtmlText(html: string): ReactNode {
-  const parts: ReactNode[] = [];
-  const regex = /<b>(.+?)<\/b>/g;
-  let lastIndex = 0;
-  let match;
-
-  while ((match = regex.exec(html)) !== null) {
-    // Add text before the bold part
-    if (match.index > lastIndex) {
-      parts.push(html.substring(lastIndex, match.index));
-    }
-    // Add bold text
-    parts.push(
-      <strong key={`bold-${match.index}`}>{match[1]}</strong>
-    );
-    lastIndex = regex.lastIndex;
-  }
-
-  // Add remaining text
-  if (lastIndex < html.length) {
-    parts.push(html.substring(lastIndex));
-  }
-
-  return parts.length > 0 ? parts : html;
-}
-
 const DEFAULT_SETTINGS: TextSettings = {
   fontFamily: "var(--font-geist-sans), sans-serif",
   fontSize: 20,
@@ -108,8 +80,8 @@ export default function Page() {
   const [savedFiles, setSavedFiles] = useState<SavedDocumentSummary[]>([]);
   const [savedFilesLoading, setSavedFilesLoading] = useState(false);
   const [openingSavedDocumentId, setOpeningSavedDocumentId] = useState<string | null>(null);
-  const [savingDocument, setSavingDocument] = useState(false);
   const [activeSavedDocumentId, setActiveSavedDocumentId] = useState<string | null>(null);
+  const [autosaveRetryTick, setAutosaveRetryTick] = useState(0);
   const [audioCacheStore, setAudioCacheStore] = useState<Record<string, SavedAudioEntry>>({});
   const [results, setResults] = useState<ExtractionResult[]>([]);
   const [currentPageIndex, setCurrentPageIndex] = useState<number>(0);
@@ -133,6 +105,9 @@ export default function Page() {
   const [settings, setSettings] = useState<TextSettings>(DEFAULT_SETTINGS);
   const lastHighlightedWordRef = React.useRef<number>(-1);
   const [previousViewMode, setPreviousViewMode] = useState<ViewMode>("upload");
+  const autosaveInFlightRef = React.useRef(false);
+  const autosavePendingRef = React.useRef(false);
+  const activeSavedDocumentIdRef = React.useRef<string | null>(null);
   const audioRef = React.useRef<HTMLAudioElement>(null!);
   const ttsAbortControllerRef = React.useRef<AbortController | null>(null);
   const extractionAbortControllerRef = React.useRef<AbortController | null>(null);
@@ -194,7 +169,7 @@ export default function Page() {
     saveSettingsToCookie(settings);
   }, [settings]);
 
-  const isAuthError = (value: unknown) => {
+  const isAuthError = React.useCallback((value: unknown) => {
     const message = value instanceof Error ? value.message : String(value || "");
     const normalized = message.toLowerCase();
     return (
@@ -202,9 +177,9 @@ export default function Page() {
       normalized.includes("unauthorized") ||
       normalized.includes("401")
     );
-  };
+  }, []);
 
-  const refreshAuthSession = async () => {
+  const refreshAuthSession = React.useCallback(async () => {
     const auth = getFirebaseAuth();
     const user = auth?.currentUser;
     if (!user) return false;
@@ -220,9 +195,9 @@ export default function Page() {
     } catch {
       return false;
     }
-  };
+  }, []);
 
-  const handleAuthExpired = async () => {
+  const handleAuthExpired = React.useCallback(async () => {
     const auth = getFirebaseAuth();
     try {
       await fetch("/api/auth/session", { method: "DELETE" });
@@ -241,9 +216,9 @@ export default function Page() {
     setSavedFiles([]);
     setViewMode("upload");
     setError("Session expired. Please sign in again.");
-  };
+  }, []);
 
-  const withAuthRetry = async <T,>(action: () => Promise<T>): Promise<T> => {
+  const withAuthRetry = React.useCallback(async <T,>(action: () => Promise<T>): Promise<T> => {
     try {
       return await action();
     } catch (err) {
@@ -257,7 +232,7 @@ export default function Page() {
       await handleAuthExpired();
       throw new Error("Session expired. Please sign in again.");
     }
-  };
+  }, [isAuthError, refreshAuthSession, handleAuthExpired]);
 
   const handleOpenSavedFiles = async () => {
     if (!firebaseUser) return;
@@ -318,17 +293,26 @@ export default function Page() {
   };
 
   useEffect(() => {
+    activeSavedDocumentIdRef.current = activeSavedDocumentId;
+  }, [activeSavedDocumentId]);
+
+  useEffect(() => {
     if (!isAuthenticated || !firebaseUser || results.length === 0) {
       return;
     }
 
     const autosaveTimeout = window.setTimeout(async () => {
-      try {
-        setSavingDocument(true);
+      if (autosaveInFlightRef.current) {
+        autosavePendingRef.current = true;
+        return;
+      }
 
+      autosaveInFlightRef.current = true;
+
+      try {
         const documentId = await withAuthRetry(() =>
           saveUserDocument({
-            existingDocumentId: activeSavedDocumentId,
+            existingDocumentId: activeSavedDocumentIdRef.current,
             title: results[0]?.full_text?.slice(0, 50)?.trim() || "Saved file",
             payload: {
               results,
@@ -342,11 +326,17 @@ export default function Page() {
           })
         );
 
+        activeSavedDocumentIdRef.current = documentId;
         setActiveSavedDocumentId(documentId);
       } catch (saveErr) {
         console.error("Auto-save failed:", saveErr);
       } finally {
-        setSavingDocument(false);
+        autosaveInFlightRef.current = false;
+
+        if (autosavePendingRef.current) {
+          autosavePendingRef.current = false;
+          setAutosaveRetryTick((prev) => prev + 1);
+        }
       }
     }, 1200);
 
@@ -361,6 +351,8 @@ export default function Page() {
     currentPageIndex,
     selectedBlockIndex,
     activeSavedDocumentId,
+    autosaveRetryTick,
+    withAuthRetry,
   ]);
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -820,7 +812,6 @@ export default function Page() {
           firebaseUser?.phoneNumber ? (
             <p className="text-sm text-blue-700 dark:text-blue-300 text-center font-semibold">
               Signed in as {firebaseUser.phoneNumber}
-              {savingDocument ? " • Saving file..." : ""}
             </p>
           ) : null
         }
