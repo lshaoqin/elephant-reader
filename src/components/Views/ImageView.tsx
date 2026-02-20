@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef } from "react";
+import { ZoomInIcon, ZoomOutIcon } from "@radix-ui/react-icons";
 import { Header, LoadingSpinner } from "@/components";
 import type { TextSettings } from "./SettingsView";
 
@@ -57,6 +58,15 @@ export const ImageView: React.FC<ImageViewProps> = ({
   onPrevPage,
   onCancelFormatting,
 }) => {
+  const MIN_ZOOM = 1;
+  const MAX_ZOOM = 3;
+  const ZOOM_STEP = 0.3;
+  const IMAGE_CONTAINER_PADDING = 16;
+
+  const imageKey = `${currentPage}:${result.image_base64.slice(0, 48)}`;
+  const [zoomByImageKey, setZoomByImageKey] = React.useState<Record<string, number>>({});
+  const zoom = zoomByImageKey[imageKey] ?? 1;
+  const [containerSize, setContainerSize] = React.useState({ width: 0, height: 0 });
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const dragStateRef = useRef({
     isDragging: false,
@@ -87,7 +97,61 @@ export const ImageView: React.FC<ImageViewProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [currentPage, totalPages, onNextPage, onPrevPage]);
 
+  const updateContainerSize = React.useCallback(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const nextWidth = container.clientWidth;
+    const nextHeight = container.clientHeight;
+
+    setContainerSize((prev) => {
+      if (prev.width === nextWidth && prev.height === nextHeight) {
+        return prev;
+      }
+      return { width: nextWidth, height: nextHeight };
+    });
+  }, []);
+
+  useEffect(() => {
+    updateContainerSize();
+    window.addEventListener("resize", updateContainerSize);
+    return () => {
+      window.removeEventListener("resize", updateContainerSize);
+    };
+  }, [updateContainerSize]);
+
+  useEffect(() => {
+    updateContainerSize();
+  }, [result.image_base64, currentPage, updateContainerSize]);
+
+  const naturalWidth = imageScale.naturalWidth || 0;
+  const naturalHeight = imageScale.naturalHeight || 0;
+  const availableWidth = Math.max(containerSize.width - IMAGE_CONTAINER_PADDING, 1);
+  const availableHeight = Math.max(containerSize.height - IMAGE_CONTAINER_PADDING, 1);
+
+  const fitScale =
+    naturalWidth > 0 && naturalHeight > 0
+      ? Math.min(availableWidth / naturalWidth, availableHeight / naturalHeight)
+      : 1;
+
+  const baseWidth = naturalWidth > 0 ? naturalWidth * fitScale : imageScale.width || 0;
+  const baseHeight = naturalHeight > 0 ? naturalHeight * fitScale : imageScale.height || 0;
+  const renderedWidth = baseWidth > 0 ? baseWidth * zoom : 0;
+  const renderedHeight = baseHeight > 0 ? baseHeight * zoom : 0;
+  const canPanOrScroll = renderedWidth > availableWidth + 1 || renderedHeight > availableHeight + 1;
+  const zoomInDisabled = zoom >= MAX_ZOOM - 0.001;
+  const zoomOutDisabled = zoom <= MIN_ZOOM + 0.001;
+
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container || canPanOrScroll) return;
+
+    container.scrollLeft = 0;
+    container.scrollTop = 0;
+  }, [canPanOrScroll, renderedWidth, renderedHeight]);
+
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!canPanOrScroll) return;
     if (e.pointerType === "mouse" && e.button !== 0) return;
 
     const container = scrollContainerRef.current;
@@ -122,7 +186,7 @@ export const ImageView: React.FC<ImageViewProps> = ({
     container.scrollTop = dragState.startScrollTop - deltaY;
   };
 
-  const handlePointerEnd = (e: React.PointerEvent<HTMLDivElement>) => {
+  const handlePointerEnd = () => {
     const dragState = dragStateRef.current;
 
     if (!dragState.isDragging) return;
@@ -144,7 +208,7 @@ export const ImageView: React.FC<ImageViewProps> = ({
   };
 
   const renderBoundingBoxes = () => {
-    if (!result || !imageScale.width || !imageScale.naturalWidth) return null;
+    if (!result || !renderedWidth || !naturalWidth || !naturalHeight) return null;
 
     return (
       <svg
@@ -156,15 +220,15 @@ export const ImageView: React.FC<ImageViewProps> = ({
           height: "100%",
           cursor: "pointer",
         }}
-        viewBox={`0 0 ${imageScale.width} ${imageScale.height}`}
+        viewBox={`0 0 ${renderedWidth} ${renderedHeight}`}
         preserveAspectRatio="none"
       >
         {result.blocks.map((block, index) => {
           const vertices = block.vertices;
           if (vertices.length < 2) return null;
 
-          const scaleX = imageScale.width / (imageScale.naturalWidth || 1);
-          const scaleY = imageScale.height / (imageScale.naturalHeight || 1);
+          const scaleX = renderedWidth / naturalWidth;
+          const scaleY = renderedHeight / naturalHeight;
 
           const points = vertices
             .map((v) => `${v.x * scaleX},${v.y * scaleY}`)
@@ -200,8 +264,48 @@ export const ImageView: React.FC<ImageViewProps> = ({
       {/* Image Container */}
       <div className="flex-1 relative bg-black overflow-hidden">
         <div
+          className="absolute z-30 flex flex-col gap-4"
+          style={{ right: "24px", bottom: "24px" }}
+        >
+          {!zoomInDisabled ? (
+            <button
+              onClick={() => {
+                setZoomByImageKey((prev) => ({
+                  ...prev,
+                  [imageKey]: Math.min(MAX_ZOOM, zoom + ZOOM_STEP),
+                }));
+              }}
+              className="w-16 h-16 rounded-full border-2 flex items-center justify-center transition-colors bg-white hover:bg-blue-50 text-blue-700 shadow-lg border-blue-600"
+              aria-label="Zoom in"
+              title="Zoom in"
+            >
+              <ZoomInIcon className="w-8 h-8" />
+            </button>
+          ) : (
+            <div className="w-16 h-16" aria-hidden="true" />
+          )}
+          {!zoomOutDisabled ? (
+            <button
+              onClick={() => {
+                setZoomByImageKey((prev) => ({
+                  ...prev,
+                  [imageKey]: Math.max(MIN_ZOOM, zoom - ZOOM_STEP),
+                }));
+              }}
+              className="w-16 h-16 rounded-full border-2 flex items-center justify-center transition-colors bg-white hover:bg-blue-50 text-blue-700 shadow-lg border-blue-600"
+              aria-label="Zoom out"
+              title="Zoom out"
+            >
+              <ZoomOutIcon className="w-8 h-8" />
+            </button>
+          ) : (
+            <div className="w-16 h-16" aria-hidden="true" />
+          )}
+        </div>
+
+        <div
           ref={scrollContainerRef}
-          className="w-full h-full overflow-auto cursor-grab active:cursor-grabbing touch-none"
+          className={`w-full h-full ${canPanOrScroll ? "overflow-auto cursor-grab active:cursor-grabbing touch-none" : "overflow-hidden cursor-default"}`}
           style={{ WebkitOverflowScrolling: "touch" }}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
@@ -209,12 +313,19 @@ export const ImageView: React.FC<ImageViewProps> = ({
           onPointerCancel={handlePointerEnd}
         >
           <div className="min-w-full min-h-full flex items-center justify-center p-2">
-            <div className="relative inline-block">
+            <div
+              className="relative inline-block"
+              style={{
+                width: renderedWidth > 0 ? `${renderedWidth}px` : undefined,
+                height: renderedHeight > 0 ? `${renderedHeight}px` : undefined,
+              }}
+            >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={`data:image/jpeg;base64,${result.image_base64}`}
               alt="Uploaded document"
               onLoad={onImageLoad}
-              className="block w-auto h-auto max-w-none max-h-none"
+              className="block w-full h-full object-contain"
               suppressHydrationWarning
             />
             {renderBoundingBoxes()}
