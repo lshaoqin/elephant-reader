@@ -264,43 +264,40 @@ export const ImageView: React.FC<ImageViewProps> = ({
       {/* Image Container */}
       <div className="flex-1 relative bg-black overflow-hidden">
         <div
-          className="absolute z-30 flex flex-col gap-4"
-          style={{ right: "24px", bottom: "24px" }}
+          className="absolute z-40 flex flex-col gap-3 sm:gap-4"
+          style={{
+            right: "clamp(12px, 3vw, 40px)",
+            bottom: "clamp(12px, 2.5vw, 20px)",
+          }}
         >
-          {!zoomInDisabled ? (
-            <button
-              onClick={() => {
-                setZoomByImageKey((prev) => ({
-                  ...prev,
-                  [imageKey]: Math.min(MAX_ZOOM, zoom + ZOOM_STEP),
-                }));
-              }}
-              className="w-16 h-16 rounded-full border-2 flex items-center justify-center transition-colors bg-white hover:bg-blue-50 text-blue-700 shadow-lg border-blue-600"
-              aria-label="Zoom in"
-              title="Zoom in"
-            >
-              <ZoomInIcon className="w-8 h-8" />
-            </button>
-          ) : (
-            <div className="w-16 h-16" aria-hidden="true" />
-          )}
-          {!zoomOutDisabled ? (
-            <button
-              onClick={() => {
-                setZoomByImageKey((prev) => ({
-                  ...prev,
-                  [imageKey]: Math.max(MIN_ZOOM, zoom - ZOOM_STEP),
-                }));
-              }}
-              className="w-16 h-16 rounded-full border-2 flex items-center justify-center transition-colors bg-white hover:bg-blue-50 text-blue-700 shadow-lg border-blue-600"
-              aria-label="Zoom out"
-              title="Zoom out"
-            >
-              <ZoomOutIcon className="w-8 h-8" />
-            </button>
-          ) : (
-            <div className="w-16 h-16" aria-hidden="true" />
-          )}
+          <button
+            onClick={() => {
+              setZoomByImageKey((prev) => ({
+                ...prev,
+                [imageKey]: Math.min(MAX_ZOOM, zoom + ZOOM_STEP),
+              }));
+            }}
+            disabled={zoomInDisabled}
+            className="w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 lg:w-24 lg:h-24 rounded-full border-2 flex items-center justify-center transition-colors bg-white hover:bg-blue-50 text-blue-700 shadow-lg border-blue-600 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white"
+            aria-label="Zoom in"
+            title="Zoom in"
+          >
+            <ZoomInIcon className="w-7 h-7 sm:w-8 sm:h-8 md:w-9 md:h-9 lg:w-10 lg:h-10" />
+          </button>
+          <button
+            onClick={() => {
+              setZoomByImageKey((prev) => ({
+                ...prev,
+                [imageKey]: Math.max(MIN_ZOOM, zoom - ZOOM_STEP),
+              }));
+            }}
+            disabled={zoomOutDisabled}
+            className="w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 lg:w-24 lg:h-24 rounded-full border-2 flex items-center justify-center transition-colors bg-white hover:bg-blue-50 text-blue-700 shadow-lg border-blue-600 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white"
+            aria-label="Zoom out"
+            title="Zoom out"
+          >
+            <ZoomOutIcon className="w-7 h-7 sm:w-8 sm:h-8 md:w-9 md:h-9 lg:w-10 lg:h-10" />
+          </button>
         </div>
 
         <div
@@ -325,7 +322,7 @@ export const ImageView: React.FC<ImageViewProps> = ({
               src={`data:image/jpeg;base64,${result.image_base64}`}
               alt="Uploaded document"
               onLoad={onImageLoad}
-              className="block w-full h-full object-contain"
+              className="block w-full h-full"
               suppressHydrationWarning
             />
             {renderBoundingBoxes()}
