@@ -605,8 +605,11 @@ export default function Page() {
       return;
     }
 
-    // If audio is already playing, toggle play/pause
+    // If matching cached audio exists, re-attach to current audio element and toggle play/pause
     if (cachedAudioUrl && cachedAudioKey === audioCacheKey && audioRef.current) {
+      if (audioRef.current.src !== cachedAudioUrl) {
+        audioRef.current.src = cachedAudioUrl;
+      }
       if (isPlayingAudio) {
         audioRef.current.pause();
         setIsPlayingAudio(false);
