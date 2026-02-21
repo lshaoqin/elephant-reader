@@ -8,7 +8,7 @@ load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 # Models
-GEMINI_MODEL = "gemini-2.5-flash-lite"
+GEMINI_MODEL = "gemini-2.5-flash"
 
 # TTS Configuration
 TTS_LANG_CODE = 'b'

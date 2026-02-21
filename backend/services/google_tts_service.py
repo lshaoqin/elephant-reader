@@ -192,3 +192,37 @@ def generate_speech_with_word_level_timestamps(text: str, language_code: str = '
             word_index += 1
     
     return response.audio_content, timestamps
+
+
+def generate_speech_from_ssml(ssml: str, language_code: str = 'en-US', voice_name: str = 'en-US-Neural2-H'):
+    """Generate speech from raw SSML.
+
+    Args:
+        ssml: SSML content wrapped in <speak>...</speak>
+        language_code: Language code
+        voice_name: Google voice name
+
+    Returns:
+        Audio bytes (LINEAR16, 24kHz)
+    """
+    client = get_tts_client()
+
+    synthesis_input = texttospeech.SynthesisInput(ssml=ssml)
+    voice = texttospeech.VoiceSelectionParams(
+        language_code=language_code,
+        name=voice_name
+    )
+    audio_config = texttospeech.AudioConfig(
+        audio_encoding=texttospeech.AudioEncoding.LINEAR16,
+        sample_rate_hertz=24000
+    )
+
+    response = client.synthesize_speech(
+        request=texttospeech.SynthesizeSpeechRequest(
+            input=synthesis_input,
+            voice=voice,
+            audio_config=audio_config,
+        )
+    )
+
+    return response.audio_content

@@ -10,6 +10,7 @@ from routes.tts import tts_bp
 from routes.google_tts import google_tts_bp
 from routes.health import health_bp
 from routes.define_word import define_word_bp
+from routes.word_hunt import word_hunt_bp
 from routes.user_files import user_files_bp
 from utils.firebase_auth import log_firebase_credentials_path
 
@@ -38,6 +39,7 @@ def create_app():
     app.register_blueprint(google_tts_bp)
     app.register_blueprint(health_bp)
     app.register_blueprint(define_word_bp)
+    app.register_blueprint(word_hunt_bp)
     app.register_blueprint(user_files_bp)
     
     return app

@@ -17,6 +17,8 @@ interface GradientReaderProps {
   text: string;
   onWordClick?: (word: string, wordIndex: number) => void;
   highlightedWordIndex?: number;
+  successWordIndexes?: Set<number>;
+  revealWordIndexes?: Set<number>;
 }
 
 const BLACK = "#1a1a1a";
@@ -69,6 +71,8 @@ export const GradientReader: React.FC<GradientReaderProps> = ({
   text,
   onWordClick,
   highlightedWordIndex,
+  successWordIndexes,
+  revealWordIndexes,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const wordRefsRef = useRef<(HTMLSpanElement | null)[]>([]);
@@ -214,6 +218,10 @@ export const GradientReader: React.FC<GradientReaderProps> = ({
           className={[
             !word.isWhitespace && onWordClick ? "cursor-pointer hover:underline" : "",
             idx === highlightedWordIndex ? "bg-yellow-300 dark:bg-yellow-500 rounded-sm" : "",
+            successWordIndexes?.has(idx) ? "bg-emerald-300 dark:bg-emerald-700 rounded-sm ring-2 ring-emerald-500" : "",
+            revealWordIndexes?.has(idx) && !successWordIndexes?.has(idx)
+              ? "bg-amber-200 dark:bg-amber-700 rounded-sm ring-1 ring-amber-500"
+              : "",
             "transition-all duration-75 ease-in-out",
           ].filter(Boolean).join(" ")}
           onClick={() => {

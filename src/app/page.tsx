@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { UploadView, SavedFilesView, ImageView, TextView, SettingsView, EditView, ReadingView } from "@/components/Views";
+import { UploadView, SavedFilesView, ImageView, TextView, SettingsView, EditView } from "@/components/Views";
 import type { TextSettings } from "@/components/Views/SettingsView";
 import PhoneAuthView from "@/components/Auth/PhoneAuthView";
 import { getFirebaseAuth } from "@/utils/firebase-client";
@@ -39,7 +39,7 @@ interface WordTimestamp {
   end: number;
 }
 
-type ViewMode = "upload" | "saved-files" | "image" | "text" | "settings" | "edit" | "reading";
+type ViewMode = "upload" | "saved-files" | "image" | "text" | "settings" | "edit";
 
 const DEFAULT_SETTINGS: TextSettings = {
   fontFamily: "var(--font-geist-sans), sans-serif",
@@ -787,6 +787,13 @@ export default function Page() {
     setFormattingBlockIndex(null);
   };
 
+  const getSettingsBackView = (): ViewMode => {
+    if ((previousViewMode === "image" || previousViewMode === "text" || previousViewMode === "edit") && !result) {
+      return "upload";
+    }
+    return previousViewMode;
+  };
+
   if (authLoading) {
     return (
       <div className="flex min-h-screen w-screen items-center justify-center bg-white dark:bg-slate-950">
@@ -824,7 +831,10 @@ export default function Page() {
           setViewMode("edit");
         }}
         settings={settings}
-        onSettingsClick={() => setViewMode("settings")}
+        onSettingsClick={() => {
+          setPreviousViewMode("upload");
+          setViewMode("settings");
+        }}
         onCancelLoading={handleCancelLoading}
         authSection={
           firebaseUser?.phoneNumber ? (
@@ -993,10 +1003,6 @@ export default function Page() {
             setPreviousViewMode("text");
             setViewMode("edit");
           }}
-          onReadClick={() => {
-            setPreviousViewMode("text");
-            setViewMode("reading");
-          }}
         />
         <audio 
           ref={audioRef} 
@@ -1023,7 +1029,7 @@ export default function Page() {
       <SettingsView
         settings={settings}
         onSettingsChange={setSettings}
-        onBackClick={() => setViewMode(previousViewMode)}
+        onBackClick={() => setViewMode(getSettingsBackView())}
       />
     );
   }
@@ -1086,23 +1092,4 @@ export default function Page() {
     );
   }
 
-  // Reading View
-  if (viewMode === "reading" && result) {
-    const cacheKey = selectedBlockIndex !== null ? `page-${currentPageIndex}-block-${selectedBlockIndex}` : null;
-    const displayText = selectedBlockIndex !== null 
-      ? formattedCache[cacheKey!] || result.blocks[selectedBlockIndex]?.text 
-      : result.full_text;
-
-    return (
-      <ReadingView
-        displayText={displayText}
-        onBackClick={() => setViewMode("text")}
-        onSettingsClick={() => {
-          setPreviousViewMode("reading");
-          setViewMode("settings");
-        }}
-        settings={settings}
-      />
-    );
-  }
 }

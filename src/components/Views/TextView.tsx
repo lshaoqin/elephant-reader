@@ -1,11 +1,10 @@
 "use client";
 
-import React, { ReactNode, useState, useEffect } from "react";
+import React, { ReactNode, useState, useEffect, useCallback } from "react";
 import {
   FileTextIcon,
   SpeakerLoudIcon,
   Pencil2Icon,
-  BookmarkIcon,
 } from "@radix-ui/react-icons";
 import { Button, Header, TextViewBox, LoadingSpinner, MediaPlayer, WordDefinitionPopover, GradientReader } from "@/components";
 import type { TextSettings } from "./SettingsView";
@@ -15,6 +14,31 @@ interface WordTimestamp {
   start: number;
   end: number;
 }
+
+interface WordHuntData {
+  question: string;
+  correct_words: string[];
+  completion_feedback: string;
+  phoneme_audio?: {
+    audio: string;
+    sample_rate: number;
+  };
+}
+
+const POSITIVE_TAP_MESSAGES = [
+  "Great spotting!",
+  "Nice work!",
+  "Awesome find!",
+  "You got it!",
+  "Brilliant!",
+];
+
+const POSITIVE_TIP_MESSAGES = [
+  "Try sounding out the first part of each word.",
+  "Scan slowly from left to right.",
+  "Look for repeating letter patterns.",
+  "Whisper the sound and then check the word start.",
+];
 
 interface TextViewProps {
   displayText: string;
@@ -31,7 +55,6 @@ interface TextViewProps {
   onStopAudio: () => void;
   settings: TextSettings;
   onEditClick: () => void;
-  onReadClick: () => void;
 }
 
 export const TextView: React.FC<TextViewProps> = ({
@@ -49,7 +72,6 @@ export const TextView: React.FC<TextViewProps> = ({
   onStopAudio,
   settings,
   onEditClick,
-  onReadClick,
 }) => {
   const [hasAudioLoaded, setHasAudioLoaded] = useState(false);
   const [selectedWord, setSelectedWord] = useState<string | null>(null);
@@ -58,6 +80,13 @@ export const TextView: React.FC<TextViewProps> = ({
   const [isParagraphMode, setIsParagraphMode] = useState(false);
   const [currentParagraphIndex, setCurrentParagraphIndex] = useState(0);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
+  const [wordHuntData, setWordHuntData] = useState<WordHuntData | null>(null);
+  const [wordHuntLoading, setWordHuntLoading] = useState(false);
+  const [wordHuntFeedback, setWordHuntFeedback] = useState<string | null>(null);
+  const [foundWordKeys, setFoundWordKeys] = useState<Set<string>>(new Set());
+  const [revealedAnswers, setRevealedAnswers] = useState(false);
+  const [isPhonemeAudioPlaying, setIsPhonemeAudioPlaying] = useState(false);
+  const wordHuntAudioRef = React.useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -94,6 +123,149 @@ export const TextView: React.FC<TextViewProps> = ({
     onStopAudio();
     setHasAudioLoaded(false);
   };
+
+  const normalizeToken = useCallback((value: string): string =>
+    value.toLowerCase().replace(/[^\w']/g, ""), []);
+
+  const pickRandom = useCallback((items: string[]): string => {
+    if (items.length === 0) return "";
+    const index = Math.floor(Math.random() * items.length);
+    return items[index];
+  }, []);
+
+  const correctWordKeySet = React.useMemo(() => {
+    if (!wordHuntData?.correct_words?.length) return new Set<string>();
+    return new Set(wordHuntData.correct_words.map((word) => normalizeToken(word)).filter(Boolean));
+  }, [wordHuntData, normalizeToken]);
+
+  const wordHuntMarkedIndexes = useCallback((plainText: string) => {
+    const successIndexes = new Set<number>();
+    const revealIndexes = new Set<number>();
+
+    const tokens = plainText.split(/(\s+)/);
+    tokens.forEach((token, index) => {
+      if (/^\s+$/.test(token)) return;
+      const normalized = normalizeToken(token);
+      if (!normalized) return;
+      if (foundWordKeys.has(normalized)) {
+        successIndexes.add(index);
+      }
+      if (revealedAnswers && correctWordKeySet.has(normalized)) {
+        revealIndexes.add(index);
+      }
+    });
+
+    return { successIndexes, revealIndexes };
+  }, [correctWordKeySet, foundWordKeys, normalizeToken, revealedAnswers]);
+
+  const stopWordHuntAudio = () => {
+    if (wordHuntAudioRef.current) {
+      wordHuntAudioRef.current.pause();
+      wordHuntAudioRef.current.currentTime = 0;
+      wordHuntAudioRef.current = null;
+    }
+    setIsPhonemeAudioPlaying(false);
+  };
+
+  useEffect(() => {
+    return () => {
+      stopWordHuntAudio();
+    };
+  }, []);
+
+  const playWordHuntAudio = async () => {
+    const base64Audio = wordHuntData?.phoneme_audio?.audio;
+    if (!base64Audio) return;
+
+    stopWordHuntAudio();
+    const audio = new Audio(`data:audio/wav;base64,${base64Audio}`);
+    wordHuntAudioRef.current = audio;
+    audio.onended = () => setIsPhonemeAudioPlaying(false);
+
+    try {
+      await audio.play();
+      setIsPhonemeAudioPlaying(true);
+    } catch {
+      setIsPhonemeAudioPlaying(false);
+    }
+  };
+
+  const startWordHunt = useCallback(async () => {
+    const plainText = displayText.replace(/<[^>]*>/g, "").trim();
+    if (!plainText) return;
+
+    setWordHuntLoading(true);
+    setWordHuntFeedback(null);
+    setFoundWordKeys(new Set());
+    setRevealedAnswers(false);
+
+    try {
+      const response = await fetch("/api/word-hunt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: plainText }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to generate word hunt");
+      }
+
+      const result = await response.json();
+      setWordHuntData(result);
+      setWordHuntFeedback("Tap words in the text to find matches.");
+    } catch {
+      setWordHuntFeedback("Could not create a word hunt right now.");
+    } finally {
+      setWordHuntLoading(false);
+    }
+  }, [displayText]);
+
+  const revealAnswers = useCallback(() => {
+    setRevealedAnswers(true);
+    const wordCount = correctWordKeySet.size;
+    setWordHuntFeedback(
+      wordCount > 0
+        ? `Answers revealed. There ${wordCount === 1 ? "is" : "are"} ${wordCount} correct ${wordCount === 1 ? "word" : "words"}.`
+        : "Answers revealed."
+    );
+  }, [correctWordKeySet]);
+
+  const skipQuestion = useCallback(() => {
+    void startWordHunt();
+  }, [startWordHunt]);
+
+  const handleWordTapForWordHunt = useCallback((rawWord: string): boolean => {
+    if (!wordHuntData) return false;
+
+    const key = normalizeToken(rawWord);
+    if (!key) return true;
+
+    if (!correctWordKeySet.has(key)) {
+      setWordHuntFeedback("Nice try. Keep looking!");
+      return true;
+    }
+
+    if (!foundWordKeys.has(key)) {
+      const nextFound = new Set(foundWordKeys);
+      nextFound.add(key);
+      setFoundWordKeys(nextFound);
+      setWordHuntFeedback(pickRandom(POSITIVE_TAP_MESSAGES));
+
+      if (nextFound.size >= correctWordKeySet.size && correctWordKeySet.size > 0) {
+        const finalFeedback = `${wordHuntData.completion_feedback} ${pickRandom(POSITIVE_TIP_MESSAGES)}`;
+        setWordHuntFeedback(finalFeedback);
+      }
+    }
+
+    return true;
+  }, [wordHuntData, correctWordKeySet, foundWordKeys, pickRandom, normalizeToken]);
+
+  const handleWordTapForDefinition = useCallback((word: string, sentenceContext: string) => {
+    if (handleWordTapForWordHunt(word)) return;
+    setSelectedWord(word);
+    setSelectedWordContext(sentenceContext);
+    setIsPopoverOpen(true);
+  }, [handleWordTapForWordHunt]);
 
   const getSentenceFromCharRange = (plainText: string, start: number, end: number): string => {
     if (!plainText.trim()) return "";
@@ -201,14 +373,15 @@ export const TextView: React.FC<TextViewProps> = ({
       const plainText = text.replace(/<b>|<\/b>/g, "");
 
       if (settings.fontColor === "gradient") {
+        const { successIndexes, revealIndexes } = wordHuntMarkedIndexes(plainText);
         // Apply gradient reading mode based on visual lines
         return (
           <GradientReader
             text={text}
+            successWordIndexes={successIndexes}
+            revealWordIndexes={revealIndexes}
             onWordClick={(word) => {
-              setSelectedWord(word);
-              setSelectedWordContext(getSentenceForWordFallback(plainText, word));
-              setIsPopoverOpen(true);
+              handleWordTapForDefinition(word, getSentenceForWordFallback(plainText, word));
             }}
           />
         );
@@ -246,6 +419,9 @@ export const TextView: React.FC<TextViewProps> = ({
             const partStart = displayCharPos;
             const partEnd = displayCharPos + part.length;
             const shouldBold = isBold(partStart, partEnd);
+            const normalizedPart = normalizeToken(part);
+            const isSuccess = foundWordKeys.has(normalizedPart);
+            const isReveal = revealedAnswers && correctWordKeySet.has(normalizedPart);
             displayCharPos = partEnd;
 
             // If it's just whitespace, return as-is
@@ -255,7 +431,10 @@ export const TextView: React.FC<TextViewProps> = ({
 
             const classes = [
               shouldBold && "font-semibold",
+              isSuccess && "bg-emerald-300 dark:bg-emerald-700 ring-2 ring-emerald-500 rounded-sm px-0.5",
+              isReveal && !isSuccess && "bg-amber-200 dark:bg-amber-700 ring-1 ring-amber-500 rounded-sm px-0.5",
               "cursor-pointer hover:underline",
+              "transition-all duration-150",
             ]
               .filter(Boolean)
               .join(" ");
@@ -265,9 +444,10 @@ export const TextView: React.FC<TextViewProps> = ({
                 key={idx}
                 className={classes}
                 onClick={() => {
-                  setSelectedWord(part);
-                  setSelectedWordContext(getSentenceFromCharRange(plainText, partStart, partEnd));
-                  setIsPopoverOpen(true);
+                  handleWordTapForDefinition(
+                    part,
+                    getSentenceFromCharRange(plainText, partStart, partEnd)
+                  );
                 }}
               >
                 {part}
@@ -307,6 +487,7 @@ export const TextView: React.FC<TextViewProps> = ({
 
     // Split text into words while preserving original formatting
     const words = displayText.split(/(\s+)/);
+    const { successIndexes, revealIndexes } = wordHuntMarkedIndexes(displayText);
     
     // Build the timestamp to word index mapping (using displayText)
     const timestampWordMap = buildTimestampWordMap(displayText);
@@ -332,7 +513,13 @@ export const TextView: React.FC<TextViewProps> = ({
         <GradientReader
           text={text}
           highlightedWordIndex={highlightWordIdx}
+          successWordIndexes={successIndexes}
+          revealWordIndexes={revealIndexes}
           onWordClick={(_, wordIdx) => {
+            const tappedWord = words[wordIdx] ?? "";
+            if (handleWordTapForWordHunt(tappedWord)) {
+              return;
+            }
             const timestampIdx = wordToTimestampMap.get(wordIdx);
             if (timestampIdx !== undefined && wordTimestamps[timestampIdx]) {
               const audio = audioRef.current;
@@ -358,6 +545,9 @@ export const TextView: React.FC<TextViewProps> = ({
           const partEnd = displayCharPos + part.length;
           const shouldHighlight = idx === highlightWordIdx;
           const shouldBold = isBold(partStart, partEnd);
+          const normalizedPart = normalizeToken(part);
+          const isSuccess = foundWordKeys.has(normalizedPart);
+          const isReveal = revealedAnswers && correctWordKeySet.has(normalizedPart);
           displayCharPos = partEnd;
 
           // If it's just whitespace, return as-is
@@ -368,6 +558,8 @@ export const TextView: React.FC<TextViewProps> = ({
           const classes = [
             shouldHighlight && "bg-yellow-300 dark:bg-yellow-500",
             shouldBold && "font-semibold",
+            isSuccess && "bg-emerald-300 dark:bg-emerald-700 ring-2 ring-emerald-500 rounded-sm px-0.5",
+            isReveal && !isSuccess && "bg-amber-200 dark:bg-amber-700 ring-1 ring-amber-500 rounded-sm px-0.5",
             "cursor-pointer hover:opacity-70",
             "transition-all duration-75 ease-in-out",
           ]
@@ -382,6 +574,9 @@ export const TextView: React.FC<TextViewProps> = ({
               key={idx} 
               className={classes}
               onClick={() => {
+                if (handleWordTapForWordHunt(part)) {
+                  return;
+                }
                 if (timestampIdx !== undefined && wordTimestamps[timestampIdx]) {
                   const audio = audioRef.current;
                   if (audio) {
@@ -400,7 +595,7 @@ export const TextView: React.FC<TextViewProps> = ({
         })}
       </>
     );
-  }, [wordTimestamps, currentPlaybackTime, settings.fontColor, isPlayingAudio, audioRef, onPlayPauseAudio, buildTimestampWordMap]);
+  }, [wordTimestamps, currentPlaybackTime, settings.fontColor, isPlayingAudio, audioRef, onPlayPauseAudio, buildTimestampWordMap, handleWordTapForDefinition, handleWordTapForWordHunt, wordHuntMarkedIndexes, normalizeToken, foundWordKeys, revealedAnswers, correctWordKeySet]);
 
   // Split text into paragraphs, breaking long ones if needed
   const splitIntoParagraphs = (text: string): string[] => {
@@ -443,6 +638,7 @@ export const TextView: React.FC<TextViewProps> = ({
   };
 
   const showMediaPlayer = isLoadingAudio || isPlayingAudio || hasAudioLoaded;
+  const isWordHuntMode = Boolean(wordHuntData);
 
   return (
     <>
@@ -464,6 +660,58 @@ export const TextView: React.FC<TextViewProps> = ({
 
       {/* Text Content */}
       <div className="flex-1 overflow-auto p-6 sm:p-8 lg:p-12 flex flex-col items-start justify-start">
+        {wordHuntData && (
+          <div className="w-full mb-4 p-4 rounded-lg border-2 border-blue-300 dark:border-blue-600 bg-blue-50 dark:bg-slate-800">
+            <div className="flex flex-wrap items-center gap-3 mb-2">
+              <p className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900 dark:text-white leading-relaxed">
+                {wordHuntData.question}
+              </p>
+              {wordHuntData.phoneme_audio?.audio && (
+                <button
+                  onClick={playWordHuntAudio}
+                  disabled={isPhonemeAudioPlaying}
+                  className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold disabled:opacity-50"
+                >
+                  Play sound
+                </button>
+              )}
+            </div>
+            <p className="text-sm text-blue-800 dark:text-blue-200">
+              Found {foundWordKeys.size} of {correctWordKeySet.size} target words.
+            </p>
+            {wordHuntData.correct_words.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {wordHuntData.correct_words.map((word, index) => {
+                  const key = normalizeToken(word);
+                  const found = foundWordKeys.has(key);
+                  const revealed = revealedAnswers && correctWordKeySet.has(key);
+
+                  return (
+                    <span
+                      key={`${word}-${index}`}
+                      className={[
+                        "px-3 py-1 rounded-full text-sm font-semibold border",
+                        found
+                          ? "bg-emerald-200 text-emerald-900 border-emerald-500 dark:bg-emerald-700 dark:text-emerald-100 dark:border-emerald-300"
+                          : revealed
+                            ? "bg-amber-100 text-amber-900 border-amber-500 dark:bg-amber-700 dark:text-amber-100 dark:border-amber-300"
+                            : "bg-white text-slate-700 border-slate-300 dark:bg-slate-700 dark:text-slate-200 dark:border-slate-500",
+                      ].join(" ")}
+                    >
+                      {word}
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+            {wordHuntFeedback && (
+              <p className="mt-2 text-sm sm:text-base text-gray-700 dark:text-gray-200 font-medium">
+                {wordHuntFeedback}
+              </p>
+            )}
+          </div>
+        )}
+
         {isFormatting ? (
           <div className="flex items-center justify-center w-full h-full">
             <LoadingSpinner
@@ -508,7 +756,24 @@ export const TextView: React.FC<TextViewProps> = ({
 
       {/* Footer Actions */}
       <div className="flex gap-4 p-6 bg-white dark:bg-slate-900 border-t-4 border-yellow-500 flex-wrap justify-center">
-        {showMediaPlayer && !isFormatting ? (
+        {isWordHuntMode ? (
+          <>
+            <Button
+              onClick={revealAnswers}
+              disabled={wordHuntLoading || isFormatting || !wordHuntData}
+              icon={<FileTextIcon className="w-6 h-6" />}
+            >
+              Reveal answers
+            </Button>
+            <Button
+              onClick={skipQuestion}
+              disabled={wordHuntLoading || isFormatting}
+              icon={<FileTextIcon className="w-6 h-6" />}
+            >
+              {wordHuntLoading ? "Preparing..." : "Skip question"}
+            </Button>
+          </>
+        ) : showMediaPlayer && !isFormatting ? (
           <div className="flex gap-4 items-center flex-wrap justify-center">
             {isLoadingAudio ? (
               <div className="flex items-center gap-2">
@@ -587,18 +852,11 @@ export const TextView: React.FC<TextViewProps> = ({
               Listen
             </Button>
             <Button
-              onClick={onReadClick}
-              icon={
-                <img
-                  src="/mic.svg"
-                  alt="Read"
-                  className="w-6 h-6"
-                  style={{ filter: 'invert(38%) sepia(96%) saturate(2948%) hue-rotate(200deg) brightness(98%) contrast(101%)' }}
-                  suppressHydrationWarning
-                />
-              }
+              onClick={startWordHunt}
+              disabled={wordHuntLoading || isFormatting}
+              icon={<FileTextIcon className="w-6 h-6" />}
             >
-              Read
+              {wordHuntLoading ? "Preparing..." : "Word hunt"}
             </Button>
             <Button 
               onClick={onEditClick}
