@@ -111,7 +111,7 @@ export const PhoneAuthView: React.FC<PhoneAuthViewProps> = ({
           <Cross2Icon className="w-4 h-4" />
         </button>
       )}
-      <h1 className="text-2xl font-bold text-blue-600 mb-2 pr-8">Sign in with phone</h1>
+      <h1 className="text-2xl font-bold text-blue-600 mb-2 pr-8">Sign in with your phone number</h1>
       <p className="text-sm text-gray-600 dark:text-gray-300 mb-6">
         A new account will be created if the phone number is not registered.
       </p>
