@@ -6,6 +6,7 @@ import { Button } from "@/components";
 
 interface WordHuntActionsProps {
   isComplete: boolean;
+  hasRevealedAnswers: boolean;
   loading: boolean;
   isFormatting: boolean;
   hasData: boolean;
@@ -16,6 +17,7 @@ interface WordHuntActionsProps {
 
 export const WordHuntActions: React.FC<WordHuntActionsProps> = ({
   isComplete,
+  hasRevealedAnswers,
   loading,
   isFormatting,
   hasData,
@@ -23,9 +25,11 @@ export const WordHuntActions: React.FC<WordHuntActionsProps> = ({
   onSkipQuestion,
   onNextQuestion,
 }) => {
+  const showNextQuestion = isComplete || hasRevealedAnswers;
+
   return (
     <>
-      {!isComplete && (
+      {!showNextQuestion && (
         <Button
           onClick={onRevealAnswers}
           disabled={loading || isFormatting || !hasData}
@@ -35,11 +39,11 @@ export const WordHuntActions: React.FC<WordHuntActionsProps> = ({
         </Button>
       )}
       <Button
-        onClick={isComplete ? onNextQuestion : onSkipQuestion}
+        onClick={showNextQuestion ? onNextQuestion : onSkipQuestion}
         disabled={loading || isFormatting}
         icon={<FileTextIcon className="w-6 h-6" />}
       >
-        {loading ? "Preparing..." : isComplete ? "Next question" : "Skip question"}
+        {loading ? "Preparing..." : showNextQuestion ? "Next question" : "Skip question"}
       </Button>
     </>
   );

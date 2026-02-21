@@ -137,6 +137,8 @@ export const TextView: React.FC<TextViewProps> = ({
     return buildWordHuntQuestionPool(displayText, normalizeToken);
   }, [displayText, normalizeToken]);
 
+  const disableWordTap = Boolean(wordHuntData) && revealedAnswers;
+
   const wordHuntMarkedIndexes = useCallback((plainText: string) => {
     const successIndexes = new Set<number>();
     const revealIndexes = new Set<number>();
@@ -390,6 +392,7 @@ export const TextView: React.FC<TextViewProps> = ({
             successWordIndexes={successIndexes}
             revealWordIndexes={revealIndexes}
             onWordClick={(word) => {
+              if (disableWordTap) return;
               handleWordTapForDefinition(word, getSentenceForWordFallback(plainText, word));
             }}
           />
@@ -442,7 +445,7 @@ export const TextView: React.FC<TextViewProps> = ({
               shouldBold && "font-semibold",
               isSuccess && "bg-yellow-200/90 dark:bg-yellow-700/70 ring-2 ring-yellow-500 rounded-sm px-0.5 underline decoration-2 decoration-yellow-700 dark:decoration-yellow-200",
               isReveal && !isSuccess && "bg-amber-200 dark:bg-amber-700 ring-1 ring-amber-500 rounded-sm px-0.5",
-              "cursor-pointer hover:underline",
+              !disableWordTap && "cursor-pointer hover:underline",
               "transition-all duration-150",
             ]
               .filter(Boolean)
@@ -454,6 +457,7 @@ export const TextView: React.FC<TextViewProps> = ({
                 className={classes}
                 style={getWordHuntHighlightStyle(isSuccess, isReveal)}
                 onClick={() => {
+                  if (disableWordTap) return;
                   handleWordTapForDefinition(
                     part,
                     getSentenceFromCharRange(plainText, partStart, partEnd)
@@ -526,6 +530,7 @@ export const TextView: React.FC<TextViewProps> = ({
           successWordIndexes={successIndexes}
           revealWordIndexes={revealIndexes}
           onWordClick={(_, wordIdx) => {
+            if (disableWordTap) return;
             const tappedWord = words[wordIdx] ?? "";
             if (handleWordTapForWordHunt(tappedWord)) {
               return;
@@ -570,7 +575,7 @@ export const TextView: React.FC<TextViewProps> = ({
             shouldBold && "font-semibold",
             isSuccess && "bg-yellow-200/90 dark:bg-yellow-700/70 ring-2 ring-yellow-500 rounded-sm px-0.5 underline decoration-2 decoration-yellow-700 dark:decoration-yellow-200",
             isReveal && !isSuccess && "bg-amber-200 dark:bg-amber-700 ring-1 ring-amber-500 rounded-sm px-0.5",
-            "cursor-pointer hover:opacity-70",
+            !disableWordTap && "cursor-pointer hover:opacity-70",
             "transition-all duration-75 ease-in-out",
           ]
             .filter(Boolean)
@@ -585,6 +590,7 @@ export const TextView: React.FC<TextViewProps> = ({
               className={classes}
               style={getWordHuntHighlightStyle(isSuccess, isReveal)}
               onClick={() => {
+                if (disableWordTap) return;
                 if (handleWordTapForWordHunt(part)) {
                   return;
                 }
@@ -606,7 +612,7 @@ export const TextView: React.FC<TextViewProps> = ({
         })}
       </>
     );
-  }, [wordTimestamps, currentPlaybackTime, settings.fontColor, isPlayingAudio, audioRef, onPlayPauseAudio, buildTimestampWordMap, handleWordTapForDefinition, handleWordTapForWordHunt, wordHuntMarkedIndexes, normalizeToken, foundWordKeys, revealedAnswers, correctWordKeySet, getWordHuntHighlightStyle]);
+  }, [wordTimestamps, currentPlaybackTime, settings.fontColor, isPlayingAudio, audioRef, onPlayPauseAudio, buildTimestampWordMap, handleWordTapForDefinition, handleWordTapForWordHunt, wordHuntMarkedIndexes, normalizeToken, foundWordKeys, revealedAnswers, correctWordKeySet, getWordHuntHighlightStyle, disableWordTap]);
 
   // Split text into paragraphs, breaking long ones if needed
   const splitIntoParagraphs = (text: string): string[] => {
@@ -737,6 +743,7 @@ export const TextView: React.FC<TextViewProps> = ({
         {isWordHuntMode ? (
           <WordHuntActions
             isComplete={isWordHuntComplete}
+            hasRevealedAnswers={revealedAnswers}
             loading={wordHuntLoading}
             isFormatting={isFormatting}
             hasData={Boolean(wordHuntData)}
