@@ -214,6 +214,11 @@ export const GradientReader: React.FC<GradientReaderProps> = ({
           style={{
             color: word.color,
             fontWeight: word.isBold ? "bold" : "normal",
+            backgroundColor: successWordIndexes?.has(idx)
+              ? "#86efac"
+              : revealWordIndexes?.has(idx) && !successWordIndexes?.has(idx)
+                ? "#fde68a"
+                : undefined,
           }}
           className={[
             !word.isWhitespace && onWordClick ? "cursor-pointer hover:underline" : "",

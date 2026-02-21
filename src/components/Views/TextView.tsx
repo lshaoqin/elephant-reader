@@ -1,6 +1,6 @@
 "use client";
 
-import React, { ReactNode, useState, useEffect, useCallback } from "react";
+import React, { ReactNode, useState, useEffect, useCallback, CSSProperties } from "react";
 import {
   FileTextIcon,
   SpeakerLoudIcon,
@@ -11,28 +11,13 @@ import { buildWordHuntQuestionPool } from "@/components/WordHunt/questionPool";
 import WordHuntActions from "@/components/WordHunt/WordHuntActions";
 import type { WordHuntData } from "@/components/WordHunt/types";
 import type { TextSettings } from "./SettingsView";
-import { WordHuntView } from "./WordHuntView";
+import { getQuestionAwareTipMessage, getTapSuccessMessage, WordHuntView } from "./WordHuntView";
 
 interface WordTimestamp {
   word: string;
   start: number;
   end: number;
 }
-
-const POSITIVE_TAP_MESSAGES = [
-  "Great spotting!",
-  "Nice work!",
-  "Awesome find!",
-  "You got it!",
-  "Brilliant!",
-];
-
-const POSITIVE_TIP_MESSAGES = [
-  "Try sounding out the first part of each word.",
-  "Scan slowly from left to right.",
-  "Look for repeating letter patterns.",
-  "Whisper the sound and then check the word start.",
-];
 
 interface TextViewProps {
   displayText: string;
@@ -123,10 +108,24 @@ export const TextView: React.FC<TextViewProps> = ({
   const normalizeToken = useCallback((value: string): string =>
     value.toLowerCase().replace(/[^\w']/g, ""), []);
 
-  const pickRandom = useCallback((items: string[]): string => {
-    if (items.length === 0) return "";
-    const index = Math.floor(Math.random() * items.length);
-    return items[index];
+  const getWordHuntHighlightStyle = useCallback((isSuccess: boolean, isReveal: boolean): CSSProperties | undefined => {
+    if (isSuccess) {
+      return {
+        backgroundColor: "#86efac",
+        boxShadow: "inset 0 0 0 2px #16a34a",
+        borderRadius: "0.2rem",
+      };
+    }
+
+    if (isReveal) {
+      return {
+        backgroundColor: "#fde68a",
+        boxShadow: "inset 0 0 0 1px #d97706",
+        borderRadius: "0.2rem",
+      };
+    }
+
+    return undefined;
   }, []);
 
   const correctWordKeySet = React.useMemo(() => {
@@ -259,16 +258,16 @@ export const TextView: React.FC<TextViewProps> = ({
       const nextFound = new Set(foundWordKeys);
       nextFound.add(key);
       setFoundWordKeys(nextFound);
-      setWordHuntFeedback(pickRandom(POSITIVE_TAP_MESSAGES));
+      setWordHuntFeedback(getTapSuccessMessage());
 
       if (nextFound.size >= correctWordKeySet.size && correctWordKeySet.size > 0) {
-        const finalFeedback = `${wordHuntData.completion_feedback} ${pickRandom(POSITIVE_TIP_MESSAGES)}`;
+        const finalFeedback = `${wordHuntData.completion_feedback} ${getQuestionAwareTipMessage(wordHuntData.question)}`;
         setWordHuntFeedback(finalFeedback);
       }
     }
 
     return true;
-  }, [wordHuntData, correctWordKeySet, foundWordKeys, pickRandom, normalizeToken]);
+  }, [wordHuntData, correctWordKeySet, foundWordKeys, normalizeToken]);
 
   const handleWordTapForDefinition = useCallback((word: string, sentenceContext: string) => {
     if (handleWordTapForWordHunt(word)) return;
@@ -453,6 +452,7 @@ export const TextView: React.FC<TextViewProps> = ({
               <span
                 key={idx}
                 className={classes}
+                style={getWordHuntHighlightStyle(isSuccess, isReveal)}
                 onClick={() => {
                   handleWordTapForDefinition(
                     part,
@@ -583,6 +583,7 @@ export const TextView: React.FC<TextViewProps> = ({
             <span 
               key={idx} 
               className={classes}
+              style={getWordHuntHighlightStyle(isSuccess, isReveal)}
               onClick={() => {
                 if (handleWordTapForWordHunt(part)) {
                   return;
@@ -605,7 +606,7 @@ export const TextView: React.FC<TextViewProps> = ({
         })}
       </>
     );
-  }, [wordTimestamps, currentPlaybackTime, settings.fontColor, isPlayingAudio, audioRef, onPlayPauseAudio, buildTimestampWordMap, handleWordTapForDefinition, handleWordTapForWordHunt, wordHuntMarkedIndexes, normalizeToken, foundWordKeys, revealedAnswers, correctWordKeySet]);
+  }, [wordTimestamps, currentPlaybackTime, settings.fontColor, isPlayingAudio, audioRef, onPlayPauseAudio, buildTimestampWordMap, handleWordTapForDefinition, handleWordTapForWordHunt, wordHuntMarkedIndexes, normalizeToken, foundWordKeys, revealedAnswers, correctWordKeySet, getWordHuntHighlightStyle]);
 
   // Split text into paragraphs, breaking long ones if needed
   const splitIntoParagraphs = (text: string): string[] => {
