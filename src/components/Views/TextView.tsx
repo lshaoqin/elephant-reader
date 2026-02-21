@@ -57,6 +57,7 @@ export const TextView: React.FC<TextViewProps> = ({
   const [selectedWordContext, setSelectedWordContext] = useState<string>("");
   const [isPopoverOpen, setIsPopoverOpen] = useState(false);
   const [isParagraphMode, setIsParagraphMode] = useState(false);
+  const [isListeningMode, setIsListeningMode] = useState(false);
   const [currentParagraphIndex, setCurrentParagraphIndex] = useState(0);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [wordHuntData, setWordHuntData] = useState<WordHuntData | null>(null);
@@ -73,14 +74,36 @@ export const TextView: React.FC<TextViewProps> = ({
     const audio = audioRef.current;
     if (!audio) return;
 
-    const handleLoadStart = () => {
-      setHasAudioLoaded(true);
+    const syncLoadedState = () => {
+      const hasSrc = Boolean(audio.src);
+      const hasDuration = Number.isFinite(audio.duration) && audio.duration > 0;
+      const hasReadyState = audio.readyState > 0;
+      const hasProgress = audio.currentTime > 0;
+      setHasAudioLoaded(hasSrc && (hasDuration || hasReadyState || hasProgress));
     };
 
-    audio.addEventListener("loadstart", handleLoadStart);
+    const handleEmptied = () => {
+      setHasAudioLoaded(false);
+    };
+
+    syncLoadedState();
+
+    audio.addEventListener("loadedmetadata", syncLoadedState);
+    audio.addEventListener("durationchange", syncLoadedState);
+    audio.addEventListener("canplay", syncLoadedState);
+    audio.addEventListener("play", syncLoadedState);
+    audio.addEventListener("pause", syncLoadedState);
+    audio.addEventListener("timeupdate", syncLoadedState);
+    audio.addEventListener("emptied", handleEmptied);
 
     return () => {
-      audio.removeEventListener("loadstart", handleLoadStart);
+      audio.removeEventListener("loadedmetadata", syncLoadedState);
+      audio.removeEventListener("durationchange", syncLoadedState);
+      audio.removeEventListener("canplay", syncLoadedState);
+      audio.removeEventListener("play", syncLoadedState);
+      audio.removeEventListener("pause", syncLoadedState);
+      audio.removeEventListener("timeupdate", syncLoadedState);
+      audio.removeEventListener("emptied", handleEmptied);
     };
   }, [audioRef]);
 
@@ -100,10 +123,10 @@ export const TextView: React.FC<TextViewProps> = ({
     }
   };
 
-  const handleStop = () => {
-    onStopAudio();
-    setHasAudioLoaded(false);
-  };
+  const handleListen = useCallback(() => {
+    setIsListeningMode(true);
+    onListen();
+  }, [onListen]);
 
   const normalizeToken = useCallback((value: string): string =>
     value.toLowerCase().replace(/[^\w']/g, ""), []);
@@ -654,7 +677,7 @@ export const TextView: React.FC<TextViewProps> = ({
     setCurrentParagraphIndex((prev) => Math.min(paragraphs.length - 1, prev + 1));
   };
 
-  const showMediaPlayer = isLoadingAudio || isPlayingAudio || hasAudioLoaded;
+  const showMediaPlayer = isListeningMode && (isLoadingAudio || isPlayingAudio || hasAudioLoaded);
   const isWordHuntMode = Boolean(wordHuntData);
   const isWordHuntComplete = correctWordKeySet.size > 0 && foundWordKeys.size >= correctWordKeySet.size;
   const shouldShowWordList = showWordList || revealedAnswers || isWordHuntComplete;
@@ -680,6 +703,7 @@ export const TextView: React.FC<TextViewProps> = ({
     if (showMediaPlayer) {
       onStopAudio();
       setHasAudioLoaded(false);
+      setIsListeningMode(false);
       return;
     }
 
@@ -790,7 +814,6 @@ export const TextView: React.FC<TextViewProps> = ({
                   audioRef={audioRef}
                   isPlaying={isPlayingAudio}
                   onPlayPause={onPlayPauseAudio}
-                  onStop={handleStop}
                 />
                 <div className="flex gap-2 items-center">
                   <button
@@ -850,7 +873,7 @@ export const TextView: React.FC<TextViewProps> = ({
               Paragraph mode
             </Button>
             <Button
-              onClick={onListen}
+              onClick={handleListen}
               disabled={isFormatting}
               icon={<SpeakerLoudIcon className="w-6 h-6" />}
             >

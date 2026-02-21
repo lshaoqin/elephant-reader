@@ -1,21 +1,19 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { PlayIcon, PauseIcon, StopIcon } from "@radix-ui/react-icons";
+import { PlayIcon, PauseIcon } from "@radix-ui/react-icons";
 import { Button } from "@/components";
 
 interface MediaPlayerProps {
   audioRef: React.RefObject<HTMLAudioElement>;
   isPlaying: boolean;
   onPlayPause: () => void;
-  onStop: () => void;
 }
 
 export const MediaPlayer: React.FC<MediaPlayerProps> = ({
   audioRef,
   isPlaying,
   onPlayPause,
-  onStop,
 }) => {
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
@@ -24,20 +22,40 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
     const audio = audioRef.current;
     if (!audio) return;
 
+    const syncFromAudio = () => {
+      const safeDuration = Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : 0;
+      setDuration(safeDuration);
+      setCurrentTime(audio.currentTime || 0);
+    };
+
     const handleTimeUpdate = () => {
       setCurrentTime(audio.currentTime);
     };
 
     const handleLoadedMetadata = () => {
-      setDuration(audio.duration);
+      syncFromAudio();
     };
+
+    const handleDurationChange = () => {
+      syncFromAudio();
+    };
+
+    const handleCanPlay = () => {
+      syncFromAudio();
+    };
+
+    syncFromAudio();
 
     audio.addEventListener("timeupdate", handleTimeUpdate);
     audio.addEventListener("loadedmetadata", handleLoadedMetadata);
+    audio.addEventListener("durationchange", handleDurationChange);
+    audio.addEventListener("canplay", handleCanPlay);
 
     return () => {
       audio.removeEventListener("timeupdate", handleTimeUpdate);
       audio.removeEventListener("loadedmetadata", handleLoadedMetadata);
+      audio.removeEventListener("durationchange", handleDurationChange);
+      audio.removeEventListener("canplay", handleCanPlay);
     };
   }, [audioRef]);
 
@@ -91,12 +109,6 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
           icon={isPlaying ? <PauseIcon className="w-6 h-6" /> : <PlayIcon className="w-6 h-6" />}
         >
           {isPlaying ? "Pause" : "Play"}
-        </Button>
-        <Button
-          onClick={onStop}
-          icon={<StopIcon className="w-6 h-6" />}
-        >
-          Stop
         </Button>
       </div>
     </div>
