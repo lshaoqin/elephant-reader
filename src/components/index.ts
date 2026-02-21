@@ -5,3 +5,4 @@ export { LoadingSpinner } from "./LoadingSpinner/LoadingSpinner";
 export { MediaPlayer } from "./MediaPlayer";
 export { WordDefinitionPopover } from "./WordDefinitionPopover/WordDefinitionPopover";
 export { GradientReader } from "./GradientReader/GradientReader";
+export { WordHuntActions } from "./WordHunt/WordHuntActions";

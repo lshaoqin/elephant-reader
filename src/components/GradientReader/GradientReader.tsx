@@ -218,7 +218,9 @@ export const GradientReader: React.FC<GradientReaderProps> = ({
           className={[
             !word.isWhitespace && onWordClick ? "cursor-pointer hover:underline" : "",
             idx === highlightedWordIndex ? "bg-yellow-300 dark:bg-yellow-500 rounded-sm" : "",
-            successWordIndexes?.has(idx) ? "bg-emerald-300 dark:bg-emerald-700 rounded-sm ring-2 ring-emerald-500" : "",
+            successWordIndexes?.has(idx)
+              ? "bg-yellow-200/90 dark:bg-yellow-700/70 rounded-sm ring-2 ring-yellow-500 underline decoration-2 decoration-yellow-700 dark:decoration-yellow-200"
+              : "",
             revealWordIndexes?.has(idx) && !successWordIndexes?.has(idx)
               ? "bg-amber-200 dark:bg-amber-700 rounded-sm ring-1 ring-amber-500"
               : "",

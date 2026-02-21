@@ -7,22 +7,16 @@ import {
   Pencil2Icon,
 } from "@radix-ui/react-icons";
 import { Button, Header, TextViewBox, LoadingSpinner, MediaPlayer, WordDefinitionPopover, GradientReader } from "@/components";
+import { buildWordHuntQuestionPool } from "@/components/WordHunt/questionPool";
+import WordHuntActions from "@/components/WordHunt/WordHuntActions";
+import type { WordHuntData } from "@/components/WordHunt/types";
 import type { TextSettings } from "./SettingsView";
+import { WordHuntView } from "./WordHuntView";
 
 interface WordTimestamp {
   word: string;
   start: number;
   end: number;
-}
-
-interface WordHuntData {
-  question: string;
-  correct_words: string[];
-  completion_feedback: string;
-  phoneme_audio?: {
-    audio: string;
-    sample_rate: number;
-  };
 }
 
 const POSITIVE_TAP_MESSAGES = [
@@ -85,6 +79,8 @@ export const TextView: React.FC<TextViewProps> = ({
   const [wordHuntFeedback, setWordHuntFeedback] = useState<string | null>(null);
   const [foundWordKeys, setFoundWordKeys] = useState<Set<string>>(new Set());
   const [revealedAnswers, setRevealedAnswers] = useState(false);
+  const [showWordList, setShowWordList] = useState(false);
+  const [currentWordHuntQuestionIndex, setCurrentWordHuntQuestionIndex] = useState(0);
   const [isPhonemeAudioPlaying, setIsPhonemeAudioPlaying] = useState(false);
   const wordHuntAudioRef = React.useRef<HTMLAudioElement | null>(null);
 
@@ -138,11 +134,15 @@ export const TextView: React.FC<TextViewProps> = ({
     return new Set(wordHuntData.correct_words.map((word) => normalizeToken(word)).filter(Boolean));
   }, [wordHuntData, normalizeToken]);
 
+  const wordHuntQuestionPool = React.useMemo<WordHuntData[]>(() => {
+    return buildWordHuntQuestionPool(displayText, normalizeToken);
+  }, [displayText, normalizeToken]);
+
   const wordHuntMarkedIndexes = useCallback((plainText: string) => {
     const successIndexes = new Set<number>();
     const revealIndexes = new Set<number>();
 
-    const tokens = plainText.split(/(\s+)/);
+    const tokens = plainText.split(/(\s+)/).filter((token) => token.length > 0);
     tokens.forEach((token, index) => {
       if (/^\s+$/.test(token)) return;
       const normalized = normalizeToken(token);
@@ -191,34 +191,29 @@ export const TextView: React.FC<TextViewProps> = ({
   };
 
   const startWordHunt = useCallback(async () => {
-    const plainText = displayText.replace(/<[^>]*>/g, "").trim();
-    if (!plainText) return;
-
     setWordHuntLoading(true);
     setWordHuntFeedback(null);
     setFoundWordKeys(new Set());
     setRevealedAnswers(false);
+    setShowWordList(false);
 
     try {
-      const response = await fetch("/api/word-hunt", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: plainText }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to generate word hunt");
+      if (wordHuntQuestionPool.length === 0) {
+        setWordHuntData(null);
+        setWordHuntFeedback("Could not create a word hunt right now.");
+        return;
       }
 
-      const result = await response.json();
-      setWordHuntData(result);
-      setWordHuntFeedback("Tap words in the text to find matches.");
+      const firstIndex = 0;
+      setCurrentWordHuntQuestionIndex(firstIndex);
+      setWordHuntData(wordHuntQuestionPool[firstIndex]);
+      setWordHuntFeedback(null);
     } catch {
       setWordHuntFeedback("Could not create a word hunt right now.");
     } finally {
       setWordHuntLoading(false);
     }
-  }, [displayText]);
+  }, [wordHuntQuestionPool]);
 
   const revealAnswers = useCallback(() => {
     setRevealedAnswers(true);
@@ -231,8 +226,23 @@ export const TextView: React.FC<TextViewProps> = ({
   }, [correctWordKeySet]);
 
   const skipQuestion = useCallback(() => {
-    void startWordHunt();
-  }, [startWordHunt]);
+    if (wordHuntQuestionPool.length <= 1) {
+      setWordHuntFeedback("No other question available for this text.");
+      return;
+    }
+
+    const nextIndex = (currentWordHuntQuestionIndex + 1) % wordHuntQuestionPool.length;
+    setCurrentWordHuntQuestionIndex(nextIndex);
+    setWordHuntData(wordHuntQuestionPool[nextIndex]);
+    setFoundWordKeys(new Set());
+    setRevealedAnswers(false);
+    setShowWordList(false);
+    setWordHuntFeedback(null);
+  }, [currentWordHuntQuestionIndex, wordHuntQuestionPool]);
+
+  const nextQuestion = useCallback(() => {
+    skipQuestion();
+  }, [skipQuestion]);
 
   const handleWordTapForWordHunt = useCallback((rawWord: string): boolean => {
     if (!wordHuntData) return false;
@@ -431,7 +441,7 @@ export const TextView: React.FC<TextViewProps> = ({
 
             const classes = [
               shouldBold && "font-semibold",
-              isSuccess && "bg-emerald-300 dark:bg-emerald-700 ring-2 ring-emerald-500 rounded-sm px-0.5",
+              isSuccess && "bg-yellow-200/90 dark:bg-yellow-700/70 ring-2 ring-yellow-500 rounded-sm px-0.5 underline decoration-2 decoration-yellow-700 dark:decoration-yellow-200",
               isReveal && !isSuccess && "bg-amber-200 dark:bg-amber-700 ring-1 ring-amber-500 rounded-sm px-0.5",
               "cursor-pointer hover:underline",
               "transition-all duration-150",
@@ -558,7 +568,7 @@ export const TextView: React.FC<TextViewProps> = ({
           const classes = [
             shouldHighlight && "bg-yellow-300 dark:bg-yellow-500",
             shouldBold && "font-semibold",
-            isSuccess && "bg-emerald-300 dark:bg-emerald-700 ring-2 ring-emerald-500 rounded-sm px-0.5",
+            isSuccess && "bg-yellow-200/90 dark:bg-yellow-700/70 ring-2 ring-yellow-500 rounded-sm px-0.5 underline decoration-2 decoration-yellow-700 dark:decoration-yellow-200",
             isReveal && !isSuccess && "bg-amber-200 dark:bg-amber-700 ring-1 ring-amber-500 rounded-sm px-0.5",
             "cursor-pointer hover:opacity-70",
             "transition-all duration-75 ease-in-out",
@@ -639,6 +649,8 @@ export const TextView: React.FC<TextViewProps> = ({
 
   const showMediaPlayer = isLoadingAudio || isPlayingAudio || hasAudioLoaded;
   const isWordHuntMode = Boolean(wordHuntData);
+  const isWordHuntComplete = correctWordKeySet.size > 0 && foundWordKeys.size >= correctWordKeySet.size;
+  const shouldShowWordList = showWordList || revealedAnswers || isWordHuntComplete;
 
   return (
     <>
@@ -661,55 +673,20 @@ export const TextView: React.FC<TextViewProps> = ({
       {/* Text Content */}
       <div className="flex-1 overflow-auto p-6 sm:p-8 lg:p-12 flex flex-col items-start justify-start">
         {wordHuntData && (
-          <div className="w-full mb-4 p-4 rounded-lg border-2 border-blue-300 dark:border-blue-600 bg-blue-50 dark:bg-slate-800">
-            <div className="flex flex-wrap items-center gap-3 mb-2">
-              <p className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900 dark:text-white leading-relaxed">
-                {wordHuntData.question}
-              </p>
-              {wordHuntData.phoneme_audio?.audio && (
-                <button
-                  onClick={playWordHuntAudio}
-                  disabled={isPhonemeAudioPlaying}
-                  className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold disabled:opacity-50"
-                >
-                  Play sound
-                </button>
-              )}
-            </div>
-            <p className="text-sm text-blue-800 dark:text-blue-200">
-              Found {foundWordKeys.size} of {correctWordKeySet.size} target words.
-            </p>
-            {wordHuntData.correct_words.length > 0 && (
-              <div className="mt-3 flex flex-wrap gap-2">
-                {wordHuntData.correct_words.map((word, index) => {
-                  const key = normalizeToken(word);
-                  const found = foundWordKeys.has(key);
-                  const revealed = revealedAnswers && correctWordKeySet.has(key);
-
-                  return (
-                    <span
-                      key={`${word}-${index}`}
-                      className={[
-                        "px-3 py-1 rounded-full text-sm font-semibold border",
-                        found
-                          ? "bg-emerald-200 text-emerald-900 border-emerald-500 dark:bg-emerald-700 dark:text-emerald-100 dark:border-emerald-300"
-                          : revealed
-                            ? "bg-amber-100 text-amber-900 border-amber-500 dark:bg-amber-700 dark:text-amber-100 dark:border-amber-300"
-                            : "bg-white text-slate-700 border-slate-300 dark:bg-slate-700 dark:text-slate-200 dark:border-slate-500",
-                      ].join(" ")}
-                    >
-                      {word}
-                    </span>
-                  );
-                })}
-              </div>
-            )}
-            {wordHuntFeedback && (
-              <p className="mt-2 text-sm sm:text-base text-gray-700 dark:text-gray-200 font-medium">
-                {wordHuntFeedback}
-              </p>
-            )}
-          </div>
+          <WordHuntView
+            wordHuntData={wordHuntData}
+            foundCount={foundWordKeys.size}
+            totalCount={correctWordKeySet.size}
+            isPhonemeAudioPlaying={isPhonemeAudioPlaying}
+            onPlaySound={playWordHuntAudio}
+            shouldShowWordList={shouldShowWordList}
+            onToggleWordList={() => setShowWordList((prev) => !prev)}
+            foundWordKeys={foundWordKeys}
+            revealedAnswers={revealedAnswers}
+            correctWordKeySet={correctWordKeySet}
+            normalizeToken={normalizeToken}
+            feedback={wordHuntFeedback}
+          />
         )}
 
         {isFormatting ? (
@@ -757,22 +734,15 @@ export const TextView: React.FC<TextViewProps> = ({
       {/* Footer Actions */}
       <div className="flex gap-4 p-6 bg-white dark:bg-slate-900 border-t-4 border-yellow-500 flex-wrap justify-center">
         {isWordHuntMode ? (
-          <>
-            <Button
-              onClick={revealAnswers}
-              disabled={wordHuntLoading || isFormatting || !wordHuntData}
-              icon={<FileTextIcon className="w-6 h-6" />}
-            >
-              Reveal answers
-            </Button>
-            <Button
-              onClick={skipQuestion}
-              disabled={wordHuntLoading || isFormatting}
-              icon={<FileTextIcon className="w-6 h-6" />}
-            >
-              {wordHuntLoading ? "Preparing..." : "Skip question"}
-            </Button>
-          </>
+          <WordHuntActions
+            isComplete={isWordHuntComplete}
+            loading={wordHuntLoading}
+            isFormatting={isFormatting}
+            hasData={Boolean(wordHuntData)}
+            onRevealAnswers={revealAnswers}
+            onSkipQuestion={skipQuestion}
+            onNextQuestion={nextQuestion}
+          />
         ) : showMediaPlayer && !isFormatting ? (
           <div className="flex gap-4 items-center flex-wrap justify-center">
             {isLoadingAudio ? (
