@@ -1,39 +1,43 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { SpeakerLoudIcon, Cross2Icon } from "@radix-ui/react-icons";
 
-interface Definition {
-  definition: string;
-  example?: string;
-  synonyms?: string[];
+interface AudioReading {
+  audio: string;
+  sample_rate: number;
 }
 
-interface Meaning {
-  partOfSpeech: string;
-  definitions: Definition[];
+interface ReaderTextSettings {
+  fontFamily: string;
+  fontSize: number;
+  fontColor: string;
+  lineSpacing: number;
 }
 
 interface WordDefinitionData {
   word: string;
-  phonetic?: string;
-  phonetics?: Array<{
-    text: string;
-    audio?: string;
-  }>;
-  meanings?: Meaning[];
-  origin?: string;
+  definition: string;
+  part_of_speech?: string;
+  example_sentence?: string;
   syllables?: string[];
+  audio?: {
+    full_word?: AudioReading;
+  };
 }
 
 interface WordDefinitionPopoverProps {
   word: string;
+  contextSentence?: string;
+  textSettings: ReaderTextSettings;
   isOpen: boolean;
   onClose: () => void;
 }
 
 export const WordDefinitionPopover: React.FC<WordDefinitionPopoverProps> = ({
   word,
+  contextSentence,
+  textSettings,
   isOpen,
   onClose,
 }) => {
@@ -41,6 +45,16 @@ export const WordDefinitionPopover: React.FC<WordDefinitionPopoverProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [playingAudio, setPlayingAudio] = useState(false);
+
+  const fullWordAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  const stopAllAudio = () => {
+    if (fullWordAudioRef.current) {
+      fullWordAudioRef.current.pause();
+      fullWordAudioRef.current.currentTime = 0;
+    }
+    setPlayingAudio(false);
+  };
 
   useEffect(() => {
     if (!isOpen || !word) return;
@@ -52,7 +66,10 @@ export const WordDefinitionPopover: React.FC<WordDefinitionPopoverProps> = ({
         const response = await fetch("/api/define-word", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ word }),
+          body: JSON.stringify({
+            word,
+            contextSentence: contextSentence || "",
+          }),
         });
 
         if (!response.ok) {
@@ -69,24 +86,39 @@ export const WordDefinitionPopover: React.FC<WordDefinitionPopoverProps> = ({
     };
 
     fetchDefinition();
-  }, [isOpen, word]);
+  }, [isOpen, word, contextSentence]);
 
-  const getAudioUrl = (): string | undefined => {
-    if (!data?.phonetics) return undefined;
-    for (const phonetic of data.phonetics) {
-      if (phonetic.audio) return phonetic.audio;
+  useEffect(() => {
+    if (!isOpen) {
+      stopAllAudio();
     }
-    return undefined;
+  }, [isOpen]);
+
+  useEffect(() => {
+    return () => {
+      stopAllAudio();
+    };
+  }, []);
+
+  const getAudioSrc = (audioBase64?: string): string | undefined => {
+    if (!audioBase64) return undefined;
+    return `data:audio/wav;base64,${audioBase64}`;
   };
 
-  const playAudio = () => {
-    const audioUrl = getAudioUrl();
-    if (!audioUrl) return;
+  const playFullWordAudio = () => {
+    const audioSrc = getAudioSrc(data?.audio?.full_word?.audio);
+    if (!audioSrc) return;
 
+    stopAllAudio();
+    const audio = new Audio(audioSrc);
+    fullWordAudioRef.current = audio;
     setPlayingAudio(true);
-    const audio = new Audio(audioUrl);
-    audio.play();
-    audio.onended = () => setPlayingAudio(false);
+
+    audio.onended = () => {
+      setPlayingAudio(false);
+    };
+
+    void audio.play();
   };
 
   return (
@@ -94,7 +126,10 @@ export const WordDefinitionPopover: React.FC<WordDefinitionPopoverProps> = ({
       {isOpen && (
         <div
           className="fixed inset-0 z-40"
-          onClick={() => onClose()}
+          onClick={() => {
+            stopAllAudio();
+            onClose();
+          }}
         />
       )}
       {isOpen && (
@@ -131,16 +166,19 @@ export const WordDefinitionPopover: React.FC<WordDefinitionPopoverProps> = ({
                   <h3 className="text-3xl font-bold text-gray-900 dark:text-white">
                     {data.word}
                   </h3>
-                  {getAudioUrl() && (
-                    <button
-                      onClick={playAudio}
-                      disabled={playingAudio}
-                      className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 flex-shrink-0"
-                      title="Play pronunciation"
-                    >
-                      <SpeakerLoudIcon className="w-6 h-6 text-blue-600 dark:text-blue-400" />
-                    </button>
-                  )}
+                  <div className="flex gap-2 shrink-0">
+                    {data.audio?.full_word?.audio && (
+                      <button
+                        onClick={playFullWordAudio}
+                        disabled={playingAudio}
+                        className="px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+                        title="Play full word"
+                      >
+                        <SpeakerLoudIcon className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                        <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">Word</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* Syllables */}
@@ -154,7 +192,7 @@ export const WordDefinitionPopover: React.FC<WordDefinitionPopoverProps> = ({
                     {data.syllables.map((syllable, idx) => (
                       <div
                         key={idx}
-                        className="px-4 py-2 border-2 border-blue-300 dark:border-blue-600 rounded-lg bg-blue-50 dark:bg-blue-900 text-blue-700 dark:text-blue-200 font-semibold text-base"
+                        className="px-4 py-2 border-2 rounded-lg font-semibold text-base transition-colors border-blue-300 dark:border-blue-600 bg-blue-50 dark:bg-blue-900 text-blue-700 dark:text-blue-200"
                       >
                         {syllable}
                       </div>
@@ -162,31 +200,28 @@ export const WordDefinitionPopover: React.FC<WordDefinitionPopoverProps> = ({
                   </div>
                 )}
 
-                {/* Meanings */}
-                {data.meanings && data.meanings.length > 0 && (
-                  <div className="space-y-5">
-                    {data.meanings.map((meaning, idx) => (
-                      <div key={idx}>
-                        <p className="text-lg font-semibold text-gray-700 dark:text-gray-300 italic mb-2">
-                          {meaning.partOfSpeech}
-                        </p>
-                        <div className="mt-2">
-                          {meaning.definitions.length > 0 && (
-                            <div>
-                              <p className="text-lg text-gray-800 dark:text-gray-200">
-                                {meaning.definitions[0].definition}
-                              </p>
-                              {meaning.definitions[0].example && (
-                                <p className="text-base text-gray-600 dark:text-gray-400 mt-3 italic">
-                                  &quot;{meaning.definitions[0].example}&quot;
-                                </p>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                {data.part_of_speech && (
+                  <p className="text-base italic text-gray-600 dark:text-gray-400">
+                    {data.part_of_speech}
+                  </p>
+                )}
+
+                <p
+                  className="text-lg"
+                  style={{
+                    fontFamily: textSettings.fontFamily,
+                    fontSize: `${textSettings.fontSize}px`,
+                    color: textSettings.fontColor === "gradient" ? "#1a1a1a" : textSettings.fontColor,
+                    lineHeight: textSettings.lineSpacing,
+                  }}
+                >
+                  {data.definition}
+                </p>
+
+                {data.example_sentence && (
+                  <p className="text-base text-gray-600 dark:text-gray-400 italic">
+                    Example: &quot;{data.example_sentence}&quot;
+                  </p>
                 )}
               </div>
             ) : (
@@ -212,7 +247,10 @@ export const WordDefinitionPopover: React.FC<WordDefinitionPopoverProps> = ({
             <button
               className="absolute top-2 right-2 p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
               aria-label="Close"
-              onClick={() => onClose()}
+              onClick={() => {
+                stopAllAudio();
+                onClose();
+              }}
             >
               <Cross2Icon className="w-4 h-4" />
             </button>

@@ -53,6 +53,7 @@ export const TextView: React.FC<TextViewProps> = ({
 }) => {
   const [hasAudioLoaded, setHasAudioLoaded] = useState(false);
   const [selectedWord, setSelectedWord] = useState<string | null>(null);
+  const [selectedWordContext, setSelectedWordContext] = useState<string>("");
   const [isPopoverOpen, setIsPopoverOpen] = useState(false);
   const [isParagraphMode, setIsParagraphMode] = useState(false);
   const [currentParagraphIndex, setCurrentParagraphIndex] = useState(0);
@@ -92,6 +93,53 @@ export const TextView: React.FC<TextViewProps> = ({
   const handleStop = () => {
     onStopAudio();
     setHasAudioLoaded(false);
+  };
+
+  const getSentenceFromCharRange = (plainText: string, start: number, end: number): string => {
+    if (!plainText.trim()) return "";
+
+    const left = plainText.slice(0, start);
+    const right = plainText.slice(end);
+
+    const prevBoundaryIndex = Math.max(
+      left.lastIndexOf("."),
+      left.lastIndexOf("!"),
+      left.lastIndexOf("?"),
+      left.lastIndexOf("\n")
+    );
+
+    const nextBoundaryCandidates = [
+      right.indexOf("."),
+      right.indexOf("!"),
+      right.indexOf("?"),
+      right.indexOf("\n"),
+    ].filter((value) => value >= 0);
+
+    const nextBoundaryOffset =
+      nextBoundaryCandidates.length > 0
+        ? Math.min(...nextBoundaryCandidates)
+        : right.length;
+
+    const sentenceStart = prevBoundaryIndex >= 0 ? prevBoundaryIndex + 1 : 0;
+    const sentenceEnd = end + nextBoundaryOffset + 1;
+
+    return plainText.slice(sentenceStart, sentenceEnd).trim();
+  };
+
+  const getSentenceForWordFallback = (plainText: string, rawWord: string): string => {
+    if (!plainText.trim()) return "";
+
+    const normalizedWord = rawWord.toLowerCase().replace(/[^\w-]/g, "");
+    if (!normalizedWord) return "";
+
+    const sentences = plainText.match(/[^.!?\n]+[.!?]?/g) || [plainText];
+    const matchingSentence = sentences.find((sentence) => {
+      const normalizedSentence = sentence.toLowerCase().replace(/[^\w\s-]/g, " ");
+      const parts = normalizedSentence.split(/\s+/).filter(Boolean);
+      return parts.includes(normalizedWord);
+    });
+
+    return (matchingSentence || sentences[0] || "").trim();
   };
 
   // Build a mapping of timestamp index to word index at the start (memoized)
@@ -150,6 +198,7 @@ export const TextView: React.FC<TextViewProps> = ({
   const parseTextWithHighlight = React.useMemo(() => (text: string): ReactNode => {
     if (!wordTimestamps || wordTimestamps.length === 0) {
       // Default mode: Parse HTML and make words clickable for definitions
+      const plainText = text.replace(/<b>|<\/b>/g, "");
 
       if (settings.fontColor === "gradient") {
         // Apply gradient reading mode based on visual lines
@@ -158,16 +207,15 @@ export const TextView: React.FC<TextViewProps> = ({
             text={text}
             onWordClick={(word) => {
               setSelectedWord(word);
+              setSelectedWordContext(getSentenceForWordFallback(plainText, word));
               setIsPopoverOpen(true);
             }}
           />
         );
       }
 
-      const displayText = text.replace(/<b>|<\/b>/g, "");
-
       // Standard mode without gradient reading
-      const words = displayText.split(/(\s+)/);
+      const words = plainText.split(/(\s+)/);
       
       // Build a map of which character ranges are bold (from HTML)
       const boldRanges: Array<{ start: number; end: number }> = [];
@@ -218,6 +266,7 @@ export const TextView: React.FC<TextViewProps> = ({
                 className={classes}
                 onClick={() => {
                   setSelectedWord(part);
+                  setSelectedWordContext(getSentenceFromCharRange(plainText, partStart, partEnd));
                   setIsPopoverOpen(true);
                 }}
               >
@@ -378,8 +427,13 @@ export const TextView: React.FC<TextViewProps> = ({
     <>
       <WordDefinitionPopover
         word={selectedWord || ""}
+        contextSentence={selectedWordContext}
+        textSettings={settings}
         isOpen={isPopoverOpen}
-        onClose={() => setIsPopoverOpen(false)}
+        onClose={() => {
+          setIsPopoverOpen(false);
+          setSelectedWordContext("");
+        }}
       />
       <div
         className="flex flex-col h-screen w-screen"

@@ -7,20 +7,27 @@ export async function POST(request: NextRequest) {
     if (authResult instanceof NextResponse) return authResult;
 
     const body = await request.json();
-    const { word } = body;
+    const { word, contextSentence } = body;
 
     if (!word || !word.trim()) {
       return NextResponse.json({ error: "No word provided" }, { status: 400 });
     }
 
     const backendUrl = process.env.PYTHON_BACKEND_URL || "http://localhost:8080";
+
+    const payload = {
+      word: word.trim(),
+      context_sentence:
+        typeof contextSentence === "string" ? contextSentence.trim() : "",
+    };
+
     const response = await fetch(`${backendUrl}/define-word`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${authResult.token}`,
       },
-      body: JSON.stringify({ word: word.trim() }),
+      body: JSON.stringify(payload),
     });
 
     if (!response.ok) {

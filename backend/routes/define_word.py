@@ -1,8 +1,12 @@
 """Define word endpoint."""
 from flask import request, jsonify, Blueprint
-import requests
+import base64
 import string
+from typing import Optional
 from pyphen import Pyphen
+from config import TTS_SAMPLE_RATE
+from services.gemini_service import get_word_learning_data
+from services.google_tts_service import generate_speech_with_word_level_timestamps
 from utils.firebase_auth import require_firebase_auth
 
 define_word_bp = Blueprint('define_word', __name__)
@@ -42,99 +46,42 @@ def get_syllabification(word: str) -> list:
         return []
 
 
-def get_root_word_variations(word: str) -> list:
-    """Generate common root word variations by removing suffixes.
-    
-    Args:
-        word: The word to find variations for
-        
-    Returns:
-        List of potential root words ordered by likelihood
-    """
-    variations = []
-    
-    # Remove plural 's' or 'es'
-    if word.endswith('ies') and len(word) > 4:
-        variations.append(word[:-3] + 'y')
-    if word.endswith('es') and len(word) > 3:
-        variations.append(word[:-2])
-    if word.endswith('s') and len(word) > 2 and not word.endswith('ss'):
-        variations.append(word[:-1])
-    
-    # Remove past tense 'ed'
-    if word.endswith('ed') and len(word) > 3:
-        variations.append(word[:-2])
-        # Also try doubling the last consonant (e.g., "stopped" -> "stop")
-        if len(word) > 4 and word[-3] == word[-4] and word[-3] not in 'aeiou':
-            variations.append(word[:-3])
-    
-    # Remove '-ing'
-    if word.endswith('ing') and len(word) > 4:
-        variations.append(word[:-3])
-        # Also try doubling the last consonant (e.g., "running" -> "run")
-        if len(word) > 5 and word[-4] == word[-5] and word[-5] not in 'aeiou':
-            variations.append(word[:-4])
-    
-    # Remove '-er' and '-est'
-    if word.endswith('est') and len(word) > 4:
-        variations.append(word[:-3])
-    if word.endswith('er') and len(word) > 3:
-        variations.append(word[:-2])
-    
-    return list(dict.fromkeys(variations))  # Remove duplicates while preserving order
+def normalize_syllables(word: str, model_syllables: Optional[list]) -> list:
+    """Normalize model syllables and fall back to pyphen if needed."""
+    if model_syllables and isinstance(model_syllables, list):
+        cleaned = [str(s).strip() for s in model_syllables if str(s).strip()]
+        if cleaned:
+            return cleaned
+
+    fallback = get_syllabification(word)
+    return fallback if fallback else [word]
 
 
-def fetch_definition(word: str) -> tuple:
-    """Fetch definition for a word, trying root variations if not found.
-    
-    Args:
-        word: The word to define
-        
-    Returns:
-        Tuple of (success: bool, result: dict)
-    """
-    # Try the word as-is first
-    url = f"https://api.dictionaryapi.dev/api/v2/entries/en/{word}"
-    response = requests.get(url, timeout=5)
-    
-    if response.status_code == 200:
-        data = response.json()
-        # Check if the response actually contains meanings
-        if data and len(data) > 0 and data[0].get('meanings'):
-            return True, data
-    
-    # Word not found, try root word variations
-    variations = get_root_word_variations(word)
-    for root_word in variations:
-        url = f"https://api.dictionaryapi.dev/api/v2/entries/en/{root_word}"
-        response = requests.get(url, timeout=5)
-        
-        if response.status_code == 200:
-            data = response.json()
-            # Check if the response actually contains meanings
-            if data and len(data) > 0 and data[0].get('meanings'):
-                return True, data
-    
-    # No definition found
-    return False, {"error": f"Word '{word}' not found"}
+def synthesize_reading_payload(text: str) -> dict:
+    """Generate TTS audio and convert to API payload."""
+    audio_content, _ = generate_speech_with_word_level_timestamps(
+        text=text,
+        language_code='en-US',
+        voice_name='en-US-Neural2-H'
+    )
+
+    return {
+        "audio": base64.b64encode(audio_content).decode('utf-8'),
+        "sample_rate": TTS_SAMPLE_RATE,
+    }
 
 
 
 @define_word_bp.route('/define-word', methods=['POST'])
 @require_firebase_auth
 def define_word():
-    """Fetch word definition from Dictionary API.
+    """Fetch word learning data from Gemini and generate TTS.
     
     Expects JSON with:
     {
-        "word": "word to define"
+        "word": "word to define",
+        "context_sentence": "sentence containing the word" (optional, used for meaning selection)
     }
-    
-    Returns the full Dictionary API response including:
-    - word and phonetic information
-    - phonetics with audio links
-    - origin
-    - meanings with definitions, examples, synonyms, and antonyms
     """
     try:
         data = request.get_json()
@@ -149,22 +96,35 @@ def define_word():
         word = strip_punctuation(word)
         if not word:
             return jsonify({"error": "Empty word after removing punctuation"}), 400
-        
-        # Fetch definition, trying root variations if needed
-        success, result = fetch_definition(word)
-        
-        if not success:
-            return jsonify(result), 404
-        
-        # Extract the first entry
-        word_data = result[0]
-        
-        # Add syllabification
-        word_data['syllables'] = get_syllabification(word_data.get('word', word))
-        
-        return jsonify(word_data), 200
-    
-    except requests.Timeout:
-        return jsonify({"error": "Request timeout"}), 504
+
+        context_sentence = str(data.get('context_sentence', '') or '').strip()
+
+        gemini_data = get_word_learning_data(word=word, context_sentence=context_sentence)
+
+        simple_definition = str(gemini_data.get('simple_definition', '')).strip()
+        if not simple_definition:
+            return jsonify({"error": "Could not generate a definition"}), 502
+
+        example_sentence = str(gemini_data.get('example_sentence', '')).strip()
+        if not example_sentence:
+            example_sentence = f"I can use the word {word} in a sentence."
+
+        syllables = normalize_syllables(word, gemini_data.get('syllables'))
+
+        full_word_audio = synthesize_reading_payload(word)
+
+        response_data = {
+            "word": word,
+            "definition": simple_definition,
+            "part_of_speech": gemini_data.get('part_of_speech'),
+            "example_sentence": example_sentence,
+            "syllables": syllables,
+            "audio": {
+                "full_word": full_word_audio
+            }
+        }
+
+        return jsonify(response_data), 200
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
