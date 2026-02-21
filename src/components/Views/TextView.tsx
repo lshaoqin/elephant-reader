@@ -659,6 +659,33 @@ export const TextView: React.FC<TextViewProps> = ({
   const isWordHuntComplete = correctWordKeySet.size > 0 && foundWordKeys.size >= correctWordKeySet.size;
   const shouldShowWordList = showWordList || revealedAnswers || isWordHuntComplete;
 
+  const handleTextViewBack = useCallback(() => {
+    if (isParagraphMode) {
+      setIsParagraphMode(false);
+      setCurrentParagraphIndex(0);
+      return;
+    }
+
+    if (isWordHuntMode) {
+      stopWordHuntAudio();
+      setWordHuntData(null);
+      setWordHuntFeedback(null);
+      setFoundWordKeys(new Set());
+      setRevealedAnswers(false);
+      setShowWordList(false);
+      setCurrentWordHuntQuestionIndex(0);
+      return;
+    }
+
+    if (showMediaPlayer) {
+      onStopAudio();
+      setHasAudioLoaded(false);
+      return;
+    }
+
+    onBackClick();
+  }, [isParagraphMode, isWordHuntMode, showMediaPlayer, onStopAudio, onBackClick]);
+
   return (
     <>
       <WordDefinitionPopover
@@ -675,7 +702,7 @@ export const TextView: React.FC<TextViewProps> = ({
         className="flex flex-col h-screen w-screen"
         style={{ backgroundColor: settings.backgroundColor }}
       >
-        <Header onBackClick={onBackClick} onSettingsClick={onSettingsClick} />
+        <Header onBackClick={handleTextViewBack} onSettingsClick={onSettingsClick} />
 
       {/* Text Content */}
       <div className="flex-1 overflow-auto p-6 sm:p-8 lg:p-12 flex flex-col items-start justify-start">
