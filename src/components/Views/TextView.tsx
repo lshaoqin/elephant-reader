@@ -6,7 +6,8 @@ import {
   SpeakerLoudIcon,
   Pencil2Icon,
 } from "@radix-ui/react-icons";
-import { Button, Header, TextViewBox, LoadingSpinner, MediaPlayer, WordDefinitionPopover, GradientReader } from "@/components";
+import { Button, Header, TextViewBox, LoadingSpinner, WordDefinitionPopover, GradientReader } from "@/components";
+import ListenView from "./ListenView";
 import { buildWordHuntQuestionPool } from "@/components/WordHunt/questionPool";
 import WordHuntActions from "@/components/WordHunt/WordHuntActions";
 import type { WordHuntData } from "@/components/WordHunt/types";
@@ -803,40 +804,15 @@ export const TextView: React.FC<TextViewProps> = ({
             onNextQuestion={nextQuestion}
           />
         ) : showMediaPlayer && !isFormatting ? (
-          <div className="flex gap-4 items-center flex-wrap justify-center">
-            {isLoadingAudio ? (
-              <div className="flex items-center gap-2">
-                <LoadingSpinner size="sm" color="blue" />
-              </div>
-            ) : (
-              <>
-                <MediaPlayer
-                  audioRef={audioRef}
-                  isPlaying={isPlayingAudio}
-                  onPlayPause={onPlayPauseAudio}
-                />
-                <div className="flex gap-2 items-center">
-                  <button
-                    onClick={handleSlowDown}
-                    disabled={playbackSpeed <= 0.5}
-                    className="px-2 py-1 text-sm bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold rounded transition-colors"
-                  >
-                    −
-                  </button>
-                  <div className="text-xs font-medium text-slate-600 dark:text-slate-400 whitespace-nowrap">
-                    {playbackSpeed.toFixed(2)}x speed
-                  </div>
-                  <button
-                    onClick={handleSpeedUp}
-                    disabled={playbackSpeed >= 2}
-                    className="px-2 py-1 text-sm bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold rounded transition-colors"
-                  >
-                    +
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
+          <ListenView
+            isLoadingAudio={isLoadingAudio}
+            isPlayingAudio={isPlayingAudio}
+            audioRef={audioRef}
+            onPlayPauseAudio={onPlayPauseAudio}
+            playbackSpeed={playbackSpeed}
+            onSlowDown={handleSlowDown}
+            onSpeedUp={handleSpeedUp}
+          />
         ) : isParagraphMode ? (
           <>
             <Button 
