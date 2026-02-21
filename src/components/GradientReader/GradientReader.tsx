@@ -15,7 +15,8 @@ interface WordWithColor {
 
 interface GradientReaderProps {
   text: string;
-  onWordClick: (word: string) => void;
+  onWordClick?: (word: string, wordIndex: number) => void;
+  highlightedWordIndex?: number;
 }
 
 const BLACK = "#1a1a1a";
@@ -67,6 +68,7 @@ function interpolateColor(
 export const GradientReader: React.FC<GradientReaderProps> = ({
   text,
   onWordClick,
+  highlightedWordIndex,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const wordRefsRef = useRef<(HTMLSpanElement | null)[]>([]);
@@ -209,10 +211,14 @@ export const GradientReader: React.FC<GradientReaderProps> = ({
             color: word.color,
             fontWeight: word.isBold ? "bold" : "normal",
           }}
-          className={!word.isWhitespace ? "cursor-pointer hover:underline" : ""}
+          className={[
+            !word.isWhitespace && onWordClick ? "cursor-pointer hover:underline" : "",
+            idx === highlightedWordIndex ? "bg-yellow-300 dark:bg-yellow-500 rounded-sm" : "",
+            "transition-all duration-75 ease-in-out",
+          ].filter(Boolean).join(" ")}
           onClick={() => {
-            if (!word.isWhitespace) {
-              onWordClick(word.text);
+            if (!word.isWhitespace && onWordClick) {
+              onWordClick(word.text, idx);
             }
           }}
         >

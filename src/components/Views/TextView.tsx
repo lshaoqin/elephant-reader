@@ -327,6 +327,27 @@ export const TextView: React.FC<TextViewProps> = ({
     // Get the word index to highlight from our pre-built map
     const highlightWordIdx = timestampWordMap.get(currentTimestampIdx) ?? -1;
 
+    if (settings.fontColor === "gradient") {
+      return (
+        <GradientReader
+          text={text}
+          highlightedWordIndex={highlightWordIdx}
+          onWordClick={(_, wordIdx) => {
+            const timestampIdx = wordToTimestampMap.get(wordIdx);
+            if (timestampIdx !== undefined && wordTimestamps[timestampIdx]) {
+              const audio = audioRef.current;
+              if (audio) {
+                audio.currentTime = wordTimestamps[timestampIdx].start;
+                if (!isPlayingAudio) {
+                  onPlayPauseAudio();
+                }
+              }
+            }
+          }}
+        />
+      );
+    }
+
     // Track character position in display text
     let displayCharPos = 0;
 

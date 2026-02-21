@@ -84,6 +84,54 @@ export const EditView: React.FC<EditViewProps> = ({
     onBackClick();
   };
 
+  const gradientTextStyle = React.useMemo(() => {
+    if (settings.fontColor !== "gradient") {
+      return {};
+    }
+
+    if (typeof CSS !== "undefined" && !CSS.supports("-webkit-background-clip", "text")) {
+      return {
+        color: "#1a1a1a",
+      };
+    }
+
+    const svgPattern = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 400' preserveAspectRatio='none'>
+      <defs>
+        <linearGradient id='g1' x1='0%' y1='0%' x2='100%' y2='0%'>
+          <stop offset='0%' stop-color='#1a1a1a'/>
+          <stop offset='100%' stop-color='#0066ff'/>
+        </linearGradient>
+        <linearGradient id='g2' x1='0%' y1='0%' x2='100%' y2='0%'>
+          <stop offset='0%' stop-color='#0066ff'/>
+          <stop offset='100%' stop-color='#1a1a1a'/>
+        </linearGradient>
+        <linearGradient id='g3' x1='0%' y1='0%' x2='100%' y2='0%'>
+          <stop offset='0%' stop-color='#1a1a1a'/>
+          <stop offset='100%' stop-color='#ff0033'/>
+        </linearGradient>
+        <linearGradient id='g4' x1='0%' y1='0%' x2='100%' y2='0%'>
+          <stop offset='0%' stop-color='#ff0033'/>
+          <stop offset='100%' stop-color='#1a1a1a'/>
+        </linearGradient>
+      </defs>
+      <rect x='0' y='0' width='100' height='100' fill='url(#g1)'/>
+      <rect x='0' y='100' width='100' height='100' fill='url(#g2)'/>
+      <rect x='0' y='200' width='100' height='100' fill='url(#g3)'/>
+      <rect x='0' y='300' width='100' height='100' fill='url(#g4)'/>
+    </svg>`;
+
+    return {
+      backgroundImage: `url("data:image/svg+xml;utf8,${encodeURIComponent(svgPattern)}")`,
+      backgroundRepeat: "repeat-y" as const,
+      backgroundSize: `100% ${settings.lineSpacing * 4}em`,
+      backgroundPosition: "0 0",
+      WebkitBackgroundClip: "text" as const,
+      backgroundClip: "text" as const,
+      WebkitTextFillColor: "transparent" as const,
+      color: "transparent",
+    };
+  }, [settings.fontColor, settings.lineSpacing]);
+
   return (
     <div 
       className="flex flex-col h-dvh w-screen"
@@ -94,7 +142,7 @@ export const EditView: React.FC<EditViewProps> = ({
       </div>
 
       {/* Formatting toolbar - sticky at top on mobile and tablets */}
-      <div className="sticky top-[64px] z-10 flex gap-4 p-6 bg-white dark:bg-slate-900 border-b-4 border-yellow-500 flex-wrap justify-center lg:hidden">
+      <div className="sticky top-16 z-10 flex gap-4 p-6 bg-white dark:bg-slate-900 border-b-4 border-yellow-500 flex-wrap justify-center lg:hidden">
         <Button
           onClick={handleBold}
           disabled={!selectedRange}
@@ -139,6 +187,7 @@ export const EditView: React.FC<EditViewProps> = ({
               whiteSpace: "pre-wrap",
               wordWrap: "break-word",
               overflowWrap: "break-word",
+              ...gradientTextStyle,
             }}
           />
         </TextViewBox>

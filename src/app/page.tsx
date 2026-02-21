@@ -112,6 +112,24 @@ export default function Page() {
   const ttsAbortControllerRef = React.useRef<AbortController | null>(null);
   const extractionAbortControllerRef = React.useRef<AbortController | null>(null);
   const formattingAbortControllerRef = React.useRef<AbortController | null>(null);
+
+  const safePlay = React.useCallback(async (audioElement: HTMLAudioElement): Promise<boolean> => {
+    try {
+      await audioElement.play();
+      return true;
+    } catch (err) {
+      const message = err instanceof Error ? err.message.toLowerCase() : String(err || "").toLowerCase();
+      const isInterruptedPlay =
+        message.includes("the play() request was interrupted") ||
+        message.includes("interrupted by a call to pause");
+
+      if (!isInterruptedPlay) {
+        console.warn("Audio play failed:", err);
+      }
+
+      return false;
+    }
+  }, []);
   
   // Get current result based on page index
   const result = results[currentPageIndex] || null;
@@ -593,8 +611,8 @@ export default function Page() {
         audioRef.current.pause();
         setIsPlayingAudio(false);
       } else {
-        audioRef.current.play();
-        setIsPlayingAudio(true);
+        const didPlay = await safePlay(audioRef.current);
+        setIsPlayingAudio(didPlay);
       }
       return;
     }
@@ -615,8 +633,8 @@ export default function Page() {
 
       if (audioRef.current) {
         audioRef.current.src = audioUrl;
-        audioRef.current.play();
-        setIsPlayingAudio(true);
+        const didPlay = await safePlay(audioRef.current);
+        setIsPlayingAudio(didPlay);
       }
       return;
     }
@@ -710,8 +728,8 @@ export default function Page() {
                 // Play audio
                 if (audioRef.current) {
                   audioRef.current.src = audioUrl;
-                  audioRef.current.play();
-                  setIsPlayingAudio(true);
+                  const didPlay = await safePlay(audioRef.current);
+                  setIsPlayingAudio(didPlay);
                 }
               }
               // Otherwise, just a progress update - can be used for UI later
@@ -733,14 +751,14 @@ export default function Page() {
     }
   };
 
-  const handlePlayPauseAudio = () => {
+  const handlePlayPauseAudio = async () => {
     if (audioRef.current) {
       if (isPlayingAudio) {
         audioRef.current.pause();
         setIsPlayingAudio(false);
       } else {
-        audioRef.current.play();
-        setIsPlayingAudio(true);
+        const didPlay = await safePlay(audioRef.current);
+        setIsPlayingAudio(didPlay);
       }
     }
   };
