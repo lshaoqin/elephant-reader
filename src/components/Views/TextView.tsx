@@ -403,7 +403,7 @@ export const TextView: React.FC<TextViewProps> = ({
   // Create a function to parse text with word highlighting
   // eslint-disable-next-line react/display-name
   const parseTextWithHighlight = React.useMemo(() => (text: string): ReactNode => {
-    if (!wordTimestamps || wordTimestamps.length === 0) {
+    if (!isListeningMode || !wordTimestamps || wordTimestamps.length === 0) {
       // Default mode: Parse HTML and make words clickable for definitions
       const plainText = text.replace(/<b>|<\/b>/g, "");
 
@@ -636,7 +636,7 @@ export const TextView: React.FC<TextViewProps> = ({
         })}
       </>
     );
-  }, [wordTimestamps, currentPlaybackTime, settings.fontColor, isPlayingAudio, audioRef, onPlayPauseAudio, buildTimestampWordMap, handleWordTapForDefinition, handleWordTapForWordHunt, wordHuntMarkedIndexes, normalizeToken, foundWordKeys, revealedAnswers, correctWordKeySet, getWordHuntHighlightStyle, disableWordTap]);
+  }, [isListeningMode, wordTimestamps, currentPlaybackTime, settings.fontColor, isPlayingAudio, audioRef, onPlayPauseAudio, buildTimestampWordMap, handleWordTapForDefinition, handleWordTapForWordHunt, wordHuntMarkedIndexes, normalizeToken, foundWordKeys, revealedAnswers, correctWordKeySet, getWordHuntHighlightStyle, disableWordTap]);
 
   // Split text into paragraphs, breaking long ones if needed
   const splitIntoParagraphs = (text: string): string[] => {
