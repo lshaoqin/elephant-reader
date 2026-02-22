@@ -154,7 +154,7 @@ export const WordDefinitionPopover: React.FC<WordDefinitionPopoverProps> = ({
       stopAllAudio();
       const audio = new Audio(audioSrc);
       spellingAudioRef.current = audio;
-      audio.playbackRate = 0.75;
+      audio.playbackRate = 0.5;
       setSpellingAudioPlaying(true);
 
       audio.onended = () => {
