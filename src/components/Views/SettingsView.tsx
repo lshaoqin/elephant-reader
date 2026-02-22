@@ -225,7 +225,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   }`}
                 >
                   <div
-                    className="w-6 h-6 rounded"
+                    className="w-6 h-6 rounded shrink-0"
                     style={{
                       backgroundColor: color.value === "gradient" ? "#f0f0f0" : color.value,
                       backgroundImage: color.value === "gradient" 
