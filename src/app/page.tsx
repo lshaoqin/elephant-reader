@@ -1045,6 +1045,29 @@ export default function Page() {
       : result.full_text;
 
     const handleEditSave = (editedText: string) => {
+      const editedAudioCacheKey = selectedBlockIndex !== null
+        ? `page-${currentPageIndex}-block-${selectedBlockIndex}`
+        : `page-${currentPageIndex}-full-text`;
+
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+        audioRef.current.src = "";
+      }
+      setIsPlayingAudio(false);
+      setIsLoadingAudio(false);
+      setCachedAudioUrl(null);
+      setCachedAudioKey(null);
+      setWordTimestamps([]);
+      setCurrentPlaybackTime(0);
+      lastHighlightedWordRef.current = -1;
+      setAudioCacheStore((prev) => {
+        if (!prev[editedAudioCacheKey]) return prev;
+        const next = { ...prev };
+        delete next[editedAudioCacheKey];
+        return next;
+      });
+
       // Update the formatted cache with the edited text
       if (selectedBlockIndex !== null) {
         const editedCacheKey = `page-${currentPageIndex}-block-${selectedBlockIndex}`;
