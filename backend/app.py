@@ -6,7 +6,7 @@ from routes.extract import extract_bp
 from routes.extract_batch import extract_batch_bp
 from routes.extract_pdf import extract_pdf_bp
 from routes.format_text import format_text_bp
-from routes.tts import tts_bp
+# from routes.tts import tts_bp
 from routes.google_tts import google_tts_bp
 from routes.health import health_bp
 from routes.define_word import define_word_bp
@@ -34,7 +34,7 @@ def create_app():
     app.register_blueprint(extract_batch_bp)
     app.register_blueprint(extract_pdf_bp)
     app.register_blueprint(format_text_bp)
-    app.register_blueprint(tts_bp)
+    # app.register_blueprint(tts_bp)
     app.register_blueprint(google_tts_bp)
     app.register_blueprint(health_bp)
     app.register_blueprint(define_word_bp)

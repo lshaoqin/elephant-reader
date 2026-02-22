@@ -53,7 +53,13 @@ def _initialize_firebase_admin():
         firebase_admin_app = firebase_admin.initialize_app(cred)
         return firebase_admin_app
 
-    raise RuntimeError("Firebase Admin credentials are not configured")
+    try:
+        options = {"projectId": project_id} if project_id else None
+        firebase_admin_app = firebase_admin.initialize_app(options=options)
+        print("[Firebase Auth] initialized with Application Default Credentials")
+        return firebase_admin_app
+    except Exception as exc:
+        raise RuntimeError("Firebase Admin credentials are not configured") from exc
 
 
 def require_firebase_auth(route_handler):
@@ -72,7 +78,14 @@ def require_firebase_auth(route_handler):
             _initialize_firebase_admin()
             decoded_token = auth.verify_id_token(token)
             g.firebase_user = decoded_token
-        except Exception:
+        except RuntimeError as exc:
+            print(f"[Firebase Auth] initialization error: {exc}")
+            return jsonify({"error": "Auth service misconfigured"}), 500
+        except (auth.InvalidIdTokenError, auth.ExpiredIdTokenError, auth.RevokedIdTokenError) as exc:
+            print(f"[Firebase Auth] token verification error: {type(exc).__name__}")
+            return jsonify({"error": "Invalid or expired token"}), 401
+        except Exception as exc:
+            print(f"[Firebase Auth] unexpected verification error: {type(exc).__name__}")
             return jsonify({"error": "Invalid or expired token"}), 401
 
         return route_handler(*args, **kwargs)
