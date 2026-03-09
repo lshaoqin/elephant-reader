@@ -91,15 +91,13 @@ Return ONLY valid JSON with this exact shape:
   "word": "{word}",
   "simple_definition": "A clear, child-friendly definition in one short sentence.",
     "example_sentence": "A short example sentence suitable for a primary school student.",
-  "part_of_speech": "noun|verb|adjective|adverb|other",
-  "syllables": ["syll", "a", "bles"]
+  "part_of_speech": "noun|verb|adjective|adverb|other"
 }}
 
 Rules:
 - Keep simple_definition to maximum 20 words.
 - Keep example_sentence to maximum 12 words.
 - Choose meaning that best matches the sentence context when available.
-- syllables must be in speaking order and when joined should reconstruct the spoken word.
 - Do not include markdown or extra text.
 """
 
@@ -119,7 +117,6 @@ Rules:
         "simple_definition": "A word used in this sentence.",
         "example_sentence": f"I use the word {word} every day.",
         "part_of_speech": "other",
-        "syllables": [word]
     }
 
 

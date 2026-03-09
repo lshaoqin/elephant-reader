@@ -46,17 +46,6 @@ def get_syllabification(word: str) -> list:
         return []
 
 
-def normalize_syllables(word: str, model_syllables: Optional[list]) -> list:
-    """Normalize model syllables and fall back to pyphen if needed."""
-    if model_syllables and isinstance(model_syllables, list):
-        cleaned = [str(s).strip() for s in model_syllables if str(s).strip()]
-        if cleaned:
-            return cleaned
-
-    fallback = get_syllabification(word)
-    return fallback if fallback else [word]
-
-
 def synthesize_reading_payload(text: str) -> dict:
     """Generate TTS audio and convert to API payload."""
     audio_content, _ = generate_speech_with_word_level_timestamps(
@@ -109,7 +98,7 @@ def define_word():
         if not example_sentence:
             example_sentence = f"I can use the word {word} in a sentence."
 
-        syllables = normalize_syllables(word, gemini_data.get('syllables'))
+        syllables = get_syllabification(word) or [word]
 
         full_word_audio = synthesize_reading_payload(word)
 
