@@ -305,11 +305,11 @@ export const WordDefinitionPopover: React.FC<WordDefinitionPopoverProps> = ({
             ) : data ? (
               <div className="space-y-5">
                 {/* Word and Audio Button */}
-                <div className="flex items-start justify-between gap-4">
+                <div className="flex items-start justify-between gap-6">
                   <h3 className="text-3xl font-bold text-gray-900 dark:text-white">
                     {viewMode === "practice" ? "Practice spelling" : data.word}
                   </h3>
-                  <div className="flex gap-2 shrink-0">
+                  <div className="flex gap-2 shrink-0 mr-4">
                     {viewMode === "definition" && data.audio?.full_word?.audio && (
                       <button
                         onClick={playFullWordAudio}
@@ -591,14 +591,14 @@ export const WordDefinitionPopover: React.FC<WordDefinitionPopoverProps> = ({
             )}
 
             <button
-              className="absolute top-2 right-2 p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+              className="absolute top-2 right-2 p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
               aria-label="Close"
               onClick={() => {
                 stopAllAudio();
                 onClose();
               }}
             >
-              <Cross2Icon className="w-4 h-4" />
+              <Cross2Icon className="w-5 h-5" />
             </button>
           </div>
         </div>
