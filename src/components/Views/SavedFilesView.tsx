@@ -128,13 +128,24 @@ export const SavedFilesView: React.FC<SavedFilesViewProps> = ({
                         </div>
                       )}
                     </div>
-                    <div className="p-3 h-14 flex items-center">
+                    <div className="p-3 flex flex-col justify-center gap-0.5">
                       <p
                         className="text-sm text-gray-600 dark:text-gray-400 truncate w-full"
                         style={{ fontFamily: settings.fontFamily }}
-                        title={`${item.pageCount} page${item.pageCount === 1 ? "" : "s"} • Updated ${new Date(item.updatedAtMs).toLocaleString()}`}
                       >
-                        {item.pageCount} page{item.pageCount === 1 ? "" : "s"} • Updated {new Date(item.updatedAtMs).toLocaleString()}
+                        {item.pageCount} page{item.pageCount === 1 ? "" : "s"}
+                      </p>
+                      <p
+                        className="text-xs text-gray-500 dark:text-gray-500 truncate w-full"
+                        style={{ fontFamily: settings.fontFamily }}
+                      >
+                        {new Date(item.updatedAtMs).toLocaleString("en-GB", {
+                          day: "2-digit",
+                          month: "2-digit",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
                       </p>
                     </div>
                   </div>
