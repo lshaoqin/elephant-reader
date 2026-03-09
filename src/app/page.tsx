@@ -11,6 +11,7 @@ import {
   listUserDocuments,
   loadUserDocument,
   saveUserDocument,
+  deleteUserDocument,
   type SavedAudioEntry,
   type SavedDocumentSummary,
 } from "@/utils/firebase-user-files";
@@ -267,6 +268,16 @@ export default function Page() {
       setError(message);
     } finally {
       setSavedFilesLoading(false);
+    }
+  };
+
+  const handleDeleteSavedFile = async (documentId: string) => {
+    try {
+      await withAuthRetry(() => deleteUserDocument({ documentId }));
+      setSavedFiles((prev) => prev.filter((f) => f.id !== documentId));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setError(message);
     }
   };
 
@@ -864,6 +875,7 @@ export default function Page() {
           setViewMode("settings");
         }}
         onOpenFile={handleLoadSavedFile}
+        onDeleteFile={handleDeleteSavedFile}
       />
     );
   }

@@ -166,6 +166,33 @@ def load_user_file(document_id: str):
     return jsonify(payload), 200
 
 
+@user_files_bp.route("/user-files/<document_id>", methods=["DELETE"])
+@require_firebase_auth
+def delete_user_file(document_id: str):
+    user_id = g.firebase_user.get("uid")
+
+    docs_ref = _user_documents_collection(user_id)
+    document_ref = docs_ref.document(document_id)
+    document_snapshot = document_ref.get()
+
+    if not document_snapshot.exists:
+        return jsonify({"error": "Saved file not found"}), 404
+
+    metadata = document_snapshot.to_dict() or {}
+    bucket = _get_bucket()
+
+    for path_key in ("dataPath", "previewPath"):
+        blob_path = metadata.get(path_key)
+        if blob_path:
+            try:
+                bucket.blob(blob_path).delete()
+            except Exception:
+                pass
+
+    document_ref.delete()
+    return jsonify({"success": True}), 200
+
+
 @user_files_bp.route("/user-files/<document_id>/preview", methods=["GET"])
 @require_firebase_auth
 def load_user_file_preview(document_id: str):

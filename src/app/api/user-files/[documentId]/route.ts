@@ -23,3 +23,24 @@ export async function GET(
   const data = await response.json().catch(() => ({}));
   return NextResponse.json(data, { status: response.status });
 }
+
+export async function DELETE(
+  req: NextRequest,
+  context: { params: Promise<{ documentId: string }> }
+) {
+  const authResult = await requireFirebaseAuth(req);
+  if (authResult instanceof NextResponse) return authResult;
+
+  const { documentId } = await context.params;
+  const backendUrl = process.env.PYTHON_BACKEND_URL || "http://localhost:8080";
+
+  const response = await fetch(`${backendUrl}/user-files/${documentId}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${authResult.token}`,
+    },
+  });
+
+  const data = await response.json().catch(() => ({}));
+  return NextResponse.json(data, { status: response.status });
+}

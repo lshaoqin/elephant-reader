@@ -14,6 +14,7 @@ interface SavedFilesViewProps {
   onBackClick: () => void;
   onSettingsClick: () => void;
   onOpenFile: (documentId: string) => void;
+  onDeleteFile: (documentId: string) => void;
 }
 
 export const SavedFilesView: React.FC<SavedFilesViewProps> = ({
@@ -25,9 +26,11 @@ export const SavedFilesView: React.FC<SavedFilesViewProps> = ({
   onBackClick,
   onSettingsClick,
   onOpenFile,
+  onDeleteFile,
 }) => {
   const [brokenPreviewIds, setBrokenPreviewIds] = React.useState<Set<string>>(new Set());
   const [loadedPreviewKeys, setLoadedPreviewKeys] = React.useState<Set<string>>(new Set());
+  const [confirmDeleteId, setConfirmDeleteId] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     const currentFileIds = new Set(files.map((file) => file.id));
@@ -44,6 +47,52 @@ export const SavedFilesView: React.FC<SavedFilesViewProps> = ({
   return (
     <div className="flex flex-col h-screen w-screen bg-white dark:bg-slate-950">
       <Header onBackClick={onBackClick} onSettingsClick={onSettingsClick} />
+
+      {/* Delete confirmation modal */}
+      {confirmDeleteId && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6"
+          onClick={() => setConfirmDeleteId(null)}
+        >
+          <div
+            className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl p-8 max-w-sm w-full flex flex-col gap-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex flex-col gap-2">
+              <h2
+                className="text-2xl font-bold text-gray-900 dark:text-gray-100"
+                style={{ fontFamily: settings.fontFamily }}
+              >
+                Delete file?
+              </h2>
+              <p
+                className="text-base text-gray-600 dark:text-gray-400"
+                style={{ fontFamily: settings.fontFamily }}
+              >
+                This cannot be undone.
+              </p>
+            </div>
+            <div className="flex gap-4">
+              <button
+                type="button"
+                onClick={() => setConfirmDeleteId(null)}
+                className="flex-1 py-3 px-4 rounded-xl text-lg font-semibold bg-gray-100 dark:bg-slate-700 text-gray-800 dark:text-gray-100 hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors"
+                style={{ fontFamily: settings.fontFamily }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => { onDeleteFile(confirmDeleteId); setConfirmDeleteId(null); }}
+                className="flex-1 py-3 px-4 rounded-xl text-lg font-semibold bg-red-500 text-white hover:bg-red-600 transition-colors"
+                style={{ fontFamily: settings.fontFamily }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="flex-1 overflow-auto p-6 sm:p-8">
         <div className="max-w-6xl mx-auto">
@@ -128,25 +177,44 @@ export const SavedFilesView: React.FC<SavedFilesViewProps> = ({
                         </div>
                       )}
                     </div>
-                    <div className="p-3 flex flex-col justify-center gap-0.5">
-                      <p
-                        className="text-sm text-gray-600 dark:text-gray-400 truncate w-full"
-                        style={{ fontFamily: settings.fontFamily }}
-                      >
-                        {item.pageCount} page{item.pageCount === 1 ? "" : "s"}
-                      </p>
-                      <p
-                        className="text-xs text-gray-500 dark:text-gray-500 truncate w-full"
-                        style={{ fontFamily: settings.fontFamily }}
-                      >
-                        {new Date(item.updatedAtMs).toLocaleString("en-GB", {
-                          day: "2-digit",
-                          month: "2-digit",
-                          year: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </p>
+                    <div className="p-2 flex items-start justify-between gap-1">
+                      <div className="flex flex-col gap-0.5 min-w-0">
+                        <p
+                          className="text-sm text-gray-600 dark:text-gray-400 truncate"
+                          style={{ fontFamily: settings.fontFamily }}
+                        >
+                          {item.pageCount} page{item.pageCount === 1 ? "" : "s"}
+                        </p>
+                        <p
+                          className="text-xs text-gray-500 dark:text-gray-500 truncate"
+                          style={{ fontFamily: settings.fontFamily }}
+                        >
+                          {new Date(item.updatedAtMs).toLocaleString("en-GB", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </p>
+                      </div>
+                      {confirmDeleteId === item.id ? null : (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(item.id); }}
+                          disabled={!!openingDocumentId}
+                          className="shrink-0 p-1 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950 transition-colors disabled:opacity-50"
+                          title="Delete file"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="3 6 5 6 21 6" />
+                            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                            <path d="M10 11v6" />
+                            <path d="M14 11v6" />
+                            <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+                          </svg>
+                        </button>
+                      )}
                     </div>
                   </div>
                   {openingDocumentId === item.id && (
