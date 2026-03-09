@@ -131,11 +131,13 @@ export const SavedFilesView: React.FC<SavedFilesViewProps> = ({
                 (() => {
                   const previewKey = `${item.id}:${item.previewImageUrl || ""}`;
                   return (
-                <button
+                <div
                   key={item.id}
-                  onClick={() => onOpenFile(item.id)}
-                  disabled={!!openingDocumentId}
-                  className="relative w-full max-w-[220px] mx-auto text-left border border-blue-200 dark:border-blue-800 rounded-xl overflow-hidden hover:bg-blue-50 dark:hover:bg-blue-950 transition-colors disabled:opacity-80 disabled:cursor-not-allowed"
+                  role="button"
+                  tabIndex={openingDocumentId ? -1 : 0}
+                  onClick={() => { if (!openingDocumentId) onOpenFile(item.id); }}
+                  onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && !openingDocumentId) onOpenFile(item.id); }}
+                  className={`relative w-full max-w-[220px] mx-auto text-left border border-blue-200 dark:border-blue-800 rounded-xl overflow-hidden transition-colors cursor-pointer select-none ${openingDocumentId ? "opacity-80 cursor-not-allowed" : "hover:bg-blue-50 dark:hover:bg-blue-950"}`}
                 >
                   <div className="flex flex-col">
                     <div
@@ -222,7 +224,7 @@ export const SavedFilesView: React.FC<SavedFilesViewProps> = ({
                       <LoadingSpinner label="Opening..." size="sm" color="blue" />
                     </div>
                   )}
-                </button>
+                </div>
                   );
                 })()
               ))}
