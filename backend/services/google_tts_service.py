@@ -1,5 +1,6 @@
 """Google Cloud Text-to-Speech service using Chirp3 model."""
 import os
+import html
 from google.cloud import texttospeech_v1beta1 as texttospeech
 from google.oauth2 import service_account
 
@@ -23,7 +24,7 @@ def get_tts_client():
     return _tts_client
 
 
-def generate_speech_with_timestamps(text: str, language_code: str = 'en-US', voice_name: str = 'en-US-Neural2-H"'):
+def generate_speech_with_timestamps(text: str, language_code: str = 'en-US', voice_name: str = 'en-US-Neural2-H'):
     """Generate speech from text using Google Cloud TTS Chirp3 with word timestamps.
     
     Args:
@@ -95,7 +96,7 @@ def generate_speech_with_timestamps(text: str, language_code: str = 'en-US', voi
     return response.audio_content, timestamps
 
 
-def generate_speech_with_word_level_timestamps(text: str, language_code: str = 'en-US', voice_name: str = 'en-US-Neural2-H"'):
+def generate_speech_with_word_level_timestamps(text: str, language_code: str = 'en-US', voice_name: str = 'en-US-Neural2-H'):
     """Generate speech with accurate word-level timestamps using SSML marks.
     
     This method inserts SSML mark tags between words to get precise timing information.
@@ -127,7 +128,7 @@ def generate_speech_with_word_level_timestamps(text: str, language_code: str = '
         
         for word in words:
             mark_name = f"word_{word_index}"
-            ssml_parts.append(f'<mark name="{mark_name}"/>{word}')
+            ssml_parts.append(f'<mark name="{mark_name}"/>{html.escape(word)}')
             word_index += 1
         
         ssml_parts.append('</p>')
