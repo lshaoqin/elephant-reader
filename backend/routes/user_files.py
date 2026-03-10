@@ -66,6 +66,8 @@ def list_user_files():
         data = item.to_dict() or {}
         updated_at = data.get("updatedAt")
         updated_at_ms = int(updated_at.timestamp() * 1000) if updated_at else int(datetime.utcnow().timestamp() * 1000)
+        created_at = data.get("createdAt")
+        created_at_ms = int(created_at.timestamp() * 1000) if created_at else updated_at_ms
 
         items.append({
             "id": item.id,
@@ -74,6 +76,7 @@ def list_user_files():
             "phoneNumber": data.get("phoneNumber"),
             "hasPreview": bool(data.get("previewPath")),
             "updatedAtMs": updated_at_ms,
+            "createdAtMs": created_at_ms,
         })
 
     return jsonify({"documents": items}), 200

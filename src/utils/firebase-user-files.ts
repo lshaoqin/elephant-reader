@@ -38,6 +38,7 @@ export interface SavedDocumentSummary {
   phoneNumber?: string;
   previewImageUrl?: string;
   updatedAtMs: number;
+  createdAtMs: number;
 }
 
 export async function saveUserDocument(params: {
@@ -80,6 +81,7 @@ export async function listUserDocuments(): Promise<SavedDocumentSummary[]> {
     pageCount: item.pageCount,
     phoneNumber: item.phoneNumber,
     updatedAtMs: item.updatedAtMs,
+    createdAtMs: (item as SavedDocumentSummary & { createdAtMs?: number }).createdAtMs ?? item.updatedAtMs,
     previewImageUrl:
       item.previewImageUrl
         ? `${item.previewImageUrl}?v=${item.updatedAtMs}`

@@ -31,6 +31,12 @@ export const SavedFilesView: React.FC<SavedFilesViewProps> = ({
   const [brokenPreviewIds, setBrokenPreviewIds] = React.useState<Set<string>>(new Set());
   const [loadedPreviewKeys, setLoadedPreviewKeys] = React.useState<Set<string>>(new Set());
   const [confirmDeleteId, setConfirmDeleteId] = React.useState<string | null>(null);
+  const [sortBy, setSortBy] = React.useState<"updatedAtMs" | "createdAtMs">("updatedAtMs");
+
+  const sortedFiles = React.useMemo(
+    () => [...files].sort((a, b) => b[sortBy] - a[sortBy]),
+    [files, sortBy]
+  );
 
   React.useEffect(() => {
     const currentFileIds = new Set(files.map((file) => file.id));
@@ -102,6 +108,33 @@ export const SavedFilesView: React.FC<SavedFilesViewProps> = ({
           >
             My Files
           </h1>
+          <div className="flex items-center gap-3 mb-4">
+            <span className="text-sm text-gray-500 dark:text-gray-400" style={{ fontFamily: settings.fontFamily }}>Sort by:</span>
+            <button
+              type="button"
+              onClick={() => setSortBy("updatedAtMs")}
+              className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
+                sortBy === "updatedAtMs"
+                  ? "bg-blue-600 text-white"
+                  : "bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600"
+              }`}
+              style={{ fontFamily: settings.fontFamily }}
+            >
+              Last modified
+            </button>
+            <button
+              type="button"
+              onClick={() => setSortBy("createdAtMs")}
+              className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
+                sortBy === "createdAtMs"
+                  ? "bg-blue-600 text-white"
+                  : "bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600"
+              }`}
+              style={{ fontFamily: settings.fontFamily }}
+            >
+              Date added
+            </button>
+          </div>
           {phoneNumber && (
             <p
               className="text-sm text-gray-600 dark:text-gray-300 mb-6"
@@ -127,7 +160,7 @@ export const SavedFilesView: React.FC<SavedFilesViewProps> = ({
             </p>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
-              {files.map((item) => (
+              {sortedFiles.map((item) => (
                 (() => {
                   const previewKey = `${item.id}:${item.previewImageUrl || ""}`;
                   return (
@@ -191,7 +224,7 @@ export const SavedFilesView: React.FC<SavedFilesViewProps> = ({
                           className="text-xs text-gray-500 dark:text-gray-500 truncate"
                           style={{ fontFamily: settings.fontFamily }}
                         >
-                          {new Date(item.updatedAtMs).toLocaleString("en-GB", {
+                          {new Date(item[sortBy]).toLocaleString("en-GB", {
                             day: "2-digit",
                             month: "2-digit",
                             year: "numeric",
