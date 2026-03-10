@@ -253,6 +253,32 @@ export default function Page() {
     }
   }, [isAuthError, refreshAuthSession, handleAuthExpired]);
 
+  // Upload files directly to the Python backend to bypass Vercel's 4.5 MB body limit.
+  const uploadFileDirect = React.useCallback(async (
+    path: string,
+    formData: FormData,
+    signal?: AbortSignal
+  ): Promise<Response> => {
+    const backendUrl = process.env.NEXT_PUBLIC_PYTHON_BACKEND_URL || "";
+    const token = await firebaseUser!.getIdToken();
+    let res = await fetch(`${backendUrl}${path}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+      signal,
+    });
+    if (res.status === 401) {
+      const freshToken = await firebaseUser!.getIdToken(true);
+      res = await fetch(`${backendUrl}${path}`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${freshToken}` },
+        body: formData,
+        signal,
+      });
+    }
+    return res;
+  }, [firebaseUser]);
+
   const handleOpenSavedFiles = async () => {
     if (!firebaseUser) return;
 
@@ -431,13 +457,7 @@ export default function Page() {
         }
 
         const extractionSignal = extractionAbortControllerRef.current?.signal;
-        const res = await withAuthRetry(() =>
-          fetch("/api/extract-batch", {
-            signal: extractionSignal,
-            method: "POST",
-            body: formData,
-          })
-        );
+        const res = await uploadFileDirect("/extract-batch", formData, extractionSignal);
 
         if (!res.ok) {
           const errorData = await res.json();
@@ -467,16 +487,10 @@ export default function Page() {
         const form = new FormData();
         form.append("file", file);
 
-        const endpoint = isPdf ? "/api/extract-pdf" : "/api/extract";
+        const backendPath = isPdf ? "/extract-pdf" : "/extract";
 
         const extractionSignal = extractionAbortControllerRef.current?.signal;
-        const res = await withAuthRetry(() =>
-          fetch(endpoint, {
-            signal: extractionSignal,
-            method: "POST",
-            body: form,
-          })
-        );
+        const res = await uploadFileDirect(backendPath, form, extractionSignal);
 
         if (!res.ok) {
           const text = await res.text();
