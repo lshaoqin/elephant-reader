@@ -9,7 +9,7 @@ export async function POST(req: Request) {
     if (authResult instanceof NextResponse) return authResult;
 
     const body = await req.json();
-    const { text, language_code, voice_name } = body;
+    const { text, language_code, voice_name, provider } = body;
 
     if (!text) {
       return NextResponse.json({ error: "No text provided" }, { status: 400 });
@@ -29,6 +29,7 @@ export async function POST(req: Request) {
           text,
           language_code: language_code || "en-US",
           voice_name: voice_name || "en-US-Neural2-H",
+          provider,
         }),
       });
 

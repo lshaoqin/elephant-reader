@@ -34,6 +34,7 @@ def google_text_to_speech():
         text = data['text']
         language_code = data.get('language_code', 'en-US')
         voice_name = data.get('voice_name', 'en-US-Neural2-H')
+        requested_provider = str(data.get('provider', '') or '').strip().lower()
         
         if not text or not text.strip():
             return jsonify({"error": "Empty text"}), 400
@@ -45,10 +46,7 @@ def google_text_to_speech():
         sample_rate = 24000
         audio_mime_type = 'audio/wav'
 
-        try:
-            audio_content, timestamps, sample_rate, audio_mime_type = generate_elevenlabs_speech(text=text)
-        except ElevenLabsTTSUnavailable as elevenlabs_error:
-            print(f"ElevenLabs unavailable, falling back to Google TTS: {str(elevenlabs_error)}")
+        if requested_provider == 'google':
             provider = 'google'
             audio_content, timestamps = generate_speech_with_word_level_timestamps(
                 text=text,
@@ -56,6 +54,18 @@ def google_text_to_speech():
                 voice_name=voice_name
             )
             audio_mime_type = 'audio/wav'
+        else:
+            try:
+                audio_content, timestamps, sample_rate, audio_mime_type = generate_elevenlabs_speech(text=text)
+            except ElevenLabsTTSUnavailable as elevenlabs_error:
+                print(f"ElevenLabs unavailable, falling back to Google TTS: {str(elevenlabs_error)}")
+                provider = 'google'
+                audio_content, timestamps = generate_speech_with_word_level_timestamps(
+                    text=text,
+                    language_code=language_code,
+                    voice_name=voice_name
+                )
+                audio_mime_type = 'audio/wav'
 
         audio_base64 = base64.b64encode(audio_content).decode('utf-8')
 

@@ -88,6 +88,13 @@ export const WordDefinitionPopover: React.FC<WordDefinitionPopoverProps> = ({
     return Array.from(source.toUpperCase()).join("-");
   };
 
+  const getSpellingAudioPrompt = (value: string): string => {
+    const lettersOnly = value.replace(/[^\p{L}]/gu, "");
+    const source = (lettersOnly || value).toUpperCase();
+    // Commas create clearer pauses between letters with Google TTS.
+    return Array.from(source).join(", ");
+  };
+
   const normalizeSpellingValue = (value: string): string => {
     const lettersOnly = value.toLowerCase().replace(/[^\p{L}]/gu, "");
     return lettersOnly || value.trim().toLowerCase();
@@ -118,11 +125,15 @@ export const WordDefinitionPopover: React.FC<WordDefinitionPopoverProps> = ({
     setPracticeError(null);
 
     try {
-      const spellingPrompt = getSpellingPrompt(data.word);
+      const spellingPrompt = getSpellingAudioPrompt(data.word);
       const response = await fetch("/api/tts/google", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: spellingPrompt }),
+        body: JSON.stringify({
+          text: spellingPrompt,
+          provider: "google",
+          voice_name: "en-US-Neural2-H",
+        }),
       });
 
       if (!response.ok) {
@@ -138,7 +149,7 @@ export const WordDefinitionPopover: React.FC<WordDefinitionPopoverProps> = ({
       stopAllAudio();
       const audio = new Audio(audioSrc);
       spellingAudioRef.current = audio;
-      audio.playbackRate = 0.5;
+      audio.playbackRate = 0.75;
       setSpellingAudioPlaying(true);
 
       audio.onended = () => {
