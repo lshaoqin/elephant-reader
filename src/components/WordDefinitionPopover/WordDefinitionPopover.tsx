@@ -6,6 +6,7 @@ import { SpeakerLoudIcon, Cross2Icon } from "@radix-ui/react-icons";
 interface AudioReading {
   audio: string;
   sample_rate: number;
+  audio_mime_type?: string;
 }
 
 interface ReaderTextSettings {
@@ -92,36 +93,19 @@ export const WordDefinitionPopover: React.FC<WordDefinitionPopoverProps> = ({
     return lettersOnly || value.trim().toLowerCase();
   };
 
-  const parseTtsSseAudio = async (response: Response): Promise<string> => {
-    if (!response.body) {
-      throw new Error("No response body");
+  const parseTtsAudio = async (response: Response): Promise<{ audio: string; audioMimeType: string }> => {
+    const parsed = await response.json();
+
+    if (parsed.error) {
+      throw new Error(parsed.error);
     }
 
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split("\n");
-      buffer = lines.pop() || "";
-
-      for (const line of lines) {
-        if (!line.startsWith("data: ")) continue;
-        const dataStr = line.slice(6);
-        const parsed = JSON.parse(dataStr);
-
-        if (parsed.error) {
-          throw new Error(parsed.error);
-        }
-
-        if (parsed.status === "complete" && parsed.audio) {
-          return parsed.audio as string;
-        }
-      }
+    if (parsed.status === "complete" && parsed.audio) {
+      return {
+        audio: parsed.audio as string,
+        audioMimeType:
+          typeof parsed.audio_mime_type === "string" ? parsed.audio_mime_type : "audio/wav",
+      };
     }
 
     throw new Error("No audio returned from TTS service");
@@ -145,8 +129,8 @@ export const WordDefinitionPopover: React.FC<WordDefinitionPopoverProps> = ({
         throw new Error("Failed to generate spelling audio");
       }
 
-      const audioBase64 = await parseTtsSseAudio(response);
-      const audioSrc = getAudioSrc(audioBase64);
+      const ttsAudio = await parseTtsAudio(response);
+      const audioSrc = getAudioSrc(ttsAudio.audio, ttsAudio.audioMimeType);
       if (!audioSrc) {
         throw new Error("Invalid spelling audio");
       }
@@ -246,13 +230,16 @@ export const WordDefinitionPopover: React.FC<WordDefinitionPopoverProps> = ({
     };
   }, []);
 
-  const getAudioSrc = (audioBase64?: string): string | undefined => {
+  const getAudioSrc = (audioBase64?: string, mimeType: string = "audio/wav"): string | undefined => {
     if (!audioBase64) return undefined;
-    return `data:audio/wav;base64,${audioBase64}`;
+    return `data:${mimeType};base64,${audioBase64}`;
   };
 
   const playFullWordAudio = () => {
-    const audioSrc = getAudioSrc(data?.audio?.full_word?.audio);
+    const audioSrc = getAudioSrc(
+      data?.audio?.full_word?.audio,
+      data?.audio?.full_word?.audio_mime_type || "audio/wav"
+    );
     if (!audioSrc) return;
 
     stopAllAudio();

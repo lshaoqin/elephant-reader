@@ -6,6 +6,7 @@ export interface SavedWordTimestamp {
 
 export interface SavedAudioEntry {
   audioBase64: string;
+  audioMimeType?: string;
   timestamps?: SavedWordTimestamp[];
   sampleRate?: number;
 }

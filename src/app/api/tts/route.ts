@@ -32,27 +32,15 @@ export async function POST(req: Request) {
       });
 
       if (!response.ok) {
+        const errorText = await response.text();
         return NextResponse.json(
-          { error: "Failed to generate audio" },
+          { error: errorText || "Failed to generate audio" },
           { status: response.status }
         );
       }
 
-      // Return the streaming response directly so the frontend can handle SSE
-      if (response.body) {
-        return new NextResponse(response.body, {
-          headers: {
-            "Content-Type": "text/event-stream",
-            "Cache-Control": "no-cache",
-            Connection: "keep-alive",
-          },
-        });
-      }
-
-      return NextResponse.json(
-        { error: "No response body from backend" },
-        { status: 500 }
-      );
+      const data = await response.json();
+      return NextResponse.json(data);
     } catch (err) {
       return NextResponse.json(
         { error: `Failed to connect to backend: ${String(err)}` },

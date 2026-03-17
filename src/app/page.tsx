@@ -652,7 +652,7 @@ export default function Page() {
       for (let i = 0; i < binaryString.length; i++) {
         bytes[i] = binaryString.charCodeAt(i);
       }
-      const audioBlob = new Blob([bytes], { type: "audio/wav" });
+      const audioBlob = new Blob([bytes], { type: cachedEntry.audioMimeType || "audio/wav" });
       const audioUrl = URL.createObjectURL(audioBlob);
 
       setCachedAudioUrl(audioUrl);
@@ -667,7 +667,7 @@ export default function Page() {
       return;
     }
 
-    // Load audio from API with streaming
+    // Load audio from API
     setIsLoadingAudio(true);
     setError(null);
 
@@ -695,77 +695,51 @@ export default function Page() {
         throw new Error("Failed to generate audio");
       }
 
-      // Handle streaming response with Server-Sent Events
-      if (!response.body) {
-        throw new Error("No response body");
+      const data = await response.json();
+      if (data.error) {
+        throw new Error(data.error);
       }
 
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
+      if (data.status !== "complete" || !data.audio) {
+        throw new Error("No audio returned from TTS service");
+      }
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+      const audioMimeType = typeof data.audio_mime_type === "string" ? data.audio_mime_type : "audio/wav";
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
+      const binaryString = atob(data.audio);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      const audioBlob = new Blob([bytes], { type: audioMimeType });
+      const audioUrl = URL.createObjectURL(audioBlob);
 
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            const dataStr = line.slice(6);
-            try {
-              const data = JSON.parse(dataStr);
+      // Cache the audio URL
+      setCachedAudioUrl(audioUrl);
+      setCachedAudioKey(audioCacheKey);
 
-              if (data.error) {
-                throw new Error(data.error);
-              }
+      setAudioCacheStore((prev) => ({
+        ...prev,
+        [audioCacheKey]: {
+          audioBase64: data.audio,
+          audioMimeType,
+          timestamps: data.timestamps || [],
+          sampleRate: data.sample_rate,
+        },
+      }));
 
-              if (data.status === "complete") {
-                // Final response received
-                // Decode base64 audio and create blob
-                const binaryString = atob(data.audio);
-                const bytes = new Uint8Array(binaryString.length);
-                for (let i = 0; i < binaryString.length; i++) {
-                  bytes[i] = binaryString.charCodeAt(i);
-                }
-                const audioBlob = new Blob([bytes], { type: "audio/wav" });
-                const audioUrl = URL.createObjectURL(audioBlob);
+      // Store word timestamps if available
+      if (data.timestamps) {
+        setWordTimestamps(data.timestamps);
+      } else {
+        setWordTimestamps([]);
+      }
 
-                // Cache the audio URL
-                setCachedAudioUrl(audioUrl);
-                setCachedAudioKey(audioCacheKey);
-
-                setAudioCacheStore((prev) => ({
-                  ...prev,
-                  [audioCacheKey]: {
-                    audioBase64: data.audio,
-                    timestamps: data.timestamps || [],
-                    sampleRate: data.sample_rate,
-                  },
-                }));
-
-                // Store word timestamps if available
-                if (data.timestamps) {
-                  setWordTimestamps(data.timestamps);
-                } else {
-                  setWordTimestamps([]);
-                }
-
-                // Play audio
-                if (audioRef.current) {
-                  audioRef.current.src = audioUrl;
-                  const didPlay = await safePlay(audioRef.current);
-                  setIsPlayingAudio(didPlay);
-                }
-              }
-              // Otherwise, just a progress update - can be used for UI later
-            } catch (parseErr) {
-              console.error("Failed to parse SSE data:", parseErr);
-            }
-          }
-        }
+      // Play audio
+      if (audioRef.current) {
+        audioRef.current.src = audioUrl;
+        const didPlay = await safePlay(audioRef.current);
+        setIsPlayingAudio(didPlay);
       }
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") {
