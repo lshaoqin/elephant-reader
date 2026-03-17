@@ -46,6 +46,7 @@ export const WordDefinitionPopover: React.FC<WordDefinitionPopoverProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [playingAudio, setPlayingAudio] = useState(false);
+  const [showPractice, setShowPractice] = useState(false);
   const [practiceStep, setPracticeStep] = useState<"look" | "hear" | "write">("look");
   const [spellingInput, setSpellingInput] = useState("");
   const [spellingFeedback, setSpellingFeedback] = useState<"correct" | "incorrect" | null>(null);
@@ -184,6 +185,7 @@ export const WordDefinitionPopover: React.FC<WordDefinitionPopoverProps> = ({
   useEffect(() => {
     if (!isOpen || !word) return;
 
+    setShowPractice(false);
     resetPractice();
 
     const fetchDefinition = async () => {
@@ -283,7 +285,12 @@ export const WordDefinitionPopover: React.FC<WordDefinitionPopoverProps> = ({
               </div>
             ) : data ? (
               <div className="space-y-6">
-                <div className="flex items-start justify-between gap-6">
+                <div className="flex items-start justify-between gap-6 pt-4">
+                  {!(showPractice && practiceStep === "write") && (
+                    <h3 className="text-3xl font-bold text-gray-900 dark:text-white">
+                      {data.word}
+                    </h3>
+                  )}
                   {data.audio?.full_word?.audio && (
                     <button
                       onClick={playFullWordAudio}
@@ -323,7 +330,36 @@ export const WordDefinitionPopover: React.FC<WordDefinitionPopoverProps> = ({
                   )}
                 </div>
 
-                <div className="space-y-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-white/70 dark:bg-slate-900/30 p-4">
+                {!showPractice && (
+                  <div className="flex justify-center">
+                    <button
+                      onClick={() => {
+                        setShowPractice(true);
+                        resetPractice();
+                      }}
+                      className="px-4 py-2 rounded-lg border border-blue-200 dark:border-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900 transition-colors"
+                      title="Practice spelling"
+                    >
+                      <span className="text-sm font-semibold text-blue-700 dark:text-blue-300">
+                        Practice spelling
+                      </span>
+                    </button>
+                  </div>
+                )}
+
+                {showPractice && (
+                  <div className="space-y-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-white/70 dark:bg-slate-900/30 p-4">
+                    <div className="flex justify-end">
+                      <button
+                        onClick={() => {
+                          setShowPractice(false);
+                          resetPractice();
+                        }}
+                        className="px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 text-xs font-semibold text-gray-700 dark:text-gray-300 transition-colors"
+                      >
+                        Close practice
+                      </button>
+                    </div>
                   <div className="flex items-start justify-center gap-2 sm:gap-4">
                     {stepOrder.map((step, index) => {
                       const isActive = index === currentStepIndex;
@@ -425,7 +461,7 @@ export const WordDefinitionPopover: React.FC<WordDefinitionPopoverProps> = ({
                   {practiceStep === "write" && (
                     <div className="space-y-4">
                       <p className="text-base text-gray-700 dark:text-gray-300 text-center">
-                        Type the spelling from memory and check your answer.
+                        Now, try spelling the word yourself!
                       </p>
 
                       <input
@@ -477,12 +513,13 @@ export const WordDefinitionPopover: React.FC<WordDefinitionPopoverProps> = ({
 
                       {spellingFeedback === "incorrect" && (
                         <p className="text-red-700 dark:text-red-400 font-semibold rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-3">
-                          Try again! You can tap on a previous step to review the word.
+                          Try again! You can tap on a previous step to see the word again.
                         </p>
                       )}
                     </div>
                   )}
-                </div>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="flex items-center justify-center py-12">
