@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { SpeakerLoudIcon, Cross2Icon } from "@radix-ui/react-icons";
 
 interface AudioReading {
@@ -182,40 +182,49 @@ export const WordDefinitionPopover: React.FC<WordDefinitionPopoverProps> = ({
     setSpellingFeedback(isCorrect ? "correct" : "incorrect");
   };
 
+  const loadDefinition = useCallback(async () => {
+    if (!isOpen || !word) return;
+
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/define-word", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          word,
+          contextSentence: contextSentence || "",
+        }),
+      });
+
+      if (!response.ok) {
+        let backendError = "";
+        try {
+          const errorData = await response.json();
+          backendError = typeof errorData?.error === "string" ? errorData.error : "";
+        } catch {
+          backendError = "";
+        }
+        throw new Error(backendError || "There was a problem fetching the meaning of this word.");
+      }
+
+      const result = await response.json();
+      setData(result);
+    } catch {
+      setError("There was a problem fetching the meaning of this word.");
+    } finally {
+      setLoading(false);
+    }
+  }, [isOpen, word, contextSentence]);
+
   useEffect(() => {
     if (!isOpen || !word) return;
 
     setShowPractice(false);
     resetPractice();
 
-    const fetchDefinition = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const response = await fetch("/api/define-word", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            word,
-            contextSentence: contextSentence || "",
-          }),
-        });
-
-        if (!response.ok) {
-          throw new Error(`Failed to fetch definition: ${response.statusText}`);
-        }
-
-        const result = await response.json();
-        setData(result);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to fetch definition");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchDefinition();
-  }, [isOpen, word, contextSentence]);
+    void loadDefinition();
+  }, [isOpen, word, contextSentence, loadDefinition]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -280,8 +289,16 @@ export const WordDefinitionPopover: React.FC<WordDefinitionPopoverProps> = ({
                 <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
               </div>
             ) : error ? (
-              <div className="flex items-center justify-center py-12">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
+              <div className="flex flex-col items-center justify-center py-12 gap-4 text-center">
+                <p className="text-sm font-semibold text-red-700 dark:text-red-400 max-w-md">
+                  {error}
+                </p>
+                <button
+                  onClick={() => void loadDefinition()}
+                  className="px-4 py-2 rounded-lg border border-blue-200 dark:border-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900 transition-colors"
+                >
+                  <span className="text-sm font-semibold text-blue-700 dark:text-blue-300">Try again</span>
+                </button>
               </div>
             ) : data ? (
               <div className="space-y-6">

@@ -96,7 +96,7 @@ def define_word():
 
         example_sentence = str(gemini_data.get('example_sentence', '')).strip()
         if not example_sentence:
-            example_sentence = f"I can use the word {word} in a sentence."
+            return jsonify({"error": "Could not generate an example sentence"}), 502
 
         syllables = get_syllabification(word) or [word]
 
