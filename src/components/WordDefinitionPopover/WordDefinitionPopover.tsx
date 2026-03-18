@@ -352,7 +352,7 @@ export const WordDefinitionPopover: React.FC<WordDefinitionPopoverProps> = ({
                     </p>
                   )}
 
-                  {data.illustration?.image_url && (
+                  {data.illustration?.image_url && !showPractice && (
                     <div className="pt-2">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
