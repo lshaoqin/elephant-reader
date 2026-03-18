@@ -9,6 +9,12 @@ interface AudioReading {
   audio_mime_type?: string;
 }
 
+interface TtsWordTimestamp {
+  word: string;
+  start: number;
+  end: number;
+}
+
 interface ReaderTextSettings {
   fontFamily: string;
   fontSize: number;
@@ -59,6 +65,7 @@ export const WordDefinitionPopover: React.FC<WordDefinitionPopoverProps> = ({
   const [spellingAudioLoading, setSpellingAudioLoading] = useState(false);
   const [spellingAudioPlaying, setSpellingAudioPlaying] = useState(false);
   const [practiceError, setPracticeError] = useState<string | null>(null);
+  const [currentSpellingLetterIndex, setCurrentSpellingLetterIndex] = useState<number>(-1);
 
   const fullWordAudioRef = useRef<HTMLAudioElement | null>(null);
   const spellingAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -74,6 +81,13 @@ export const WordDefinitionPopover: React.FC<WordDefinitionPopoverProps> = ({
     }
     setPlayingAudio(false);
     setSpellingAudioPlaying(false);
+    setCurrentSpellingLetterIndex(-1);
+  };
+
+  const getSpellingLetters = (value: string): string[] => {
+    const lettersOnly = value.replace(/[^\p{L}]/gu, "");
+    const source = (lettersOnly || value).toUpperCase();
+    return Array.from(source);
   };
 
   const getPracticeSyllables = (): string[] => {
@@ -88,12 +102,6 @@ export const WordDefinitionPopover: React.FC<WordDefinitionPopoverProps> = ({
     return [data.word];
   };
 
-  const getSpellingPrompt = (value: string): string => {
-    const lettersOnly = value.replace(/[^\p{L}]/gu, "");
-    const source = lettersOnly || value;
-    return Array.from(source.toUpperCase()).join("-");
-  };
-
   const getSpellingAudioPrompt = (value: string): string => {
     const lettersOnly = value.replace(/[^\p{L}]/gu, "");
     const source = (lettersOnly || value).toUpperCase();
@@ -106,7 +114,9 @@ export const WordDefinitionPopover: React.FC<WordDefinitionPopoverProps> = ({
     return lettersOnly || value.trim().toLowerCase();
   };
 
-  const parseTtsAudio = async (response: Response): Promise<{ audio: string; audioMimeType: string }> => {
+  const parseTtsAudio = async (
+    response: Response
+  ): Promise<{ audio: string; audioMimeType: string; timestamps: TtsWordTimestamp[] }> => {
     const parsed = await response.json();
 
     if (parsed.error) {
@@ -114,10 +124,22 @@ export const WordDefinitionPopover: React.FC<WordDefinitionPopoverProps> = ({
     }
 
     if (parsed.status === "complete" && parsed.audio) {
+      const timestamps = Array.isArray(parsed.timestamps)
+        ? parsed.timestamps.filter(
+            (item: unknown): item is TtsWordTimestamp =>
+              typeof item === "object" &&
+              item !== null &&
+              typeof (item as { word?: unknown }).word === "string" &&
+              typeof (item as { start?: unknown }).start === "number" &&
+              typeof (item as { end?: unknown }).end === "number"
+          )
+        : [];
+
       return {
         audio: parsed.audio as string,
         audioMimeType:
           typeof parsed.audio_mime_type === "string" ? parsed.audio_mime_type : "audio/wav",
+        timestamps,
       };
     }
 
@@ -152,14 +174,28 @@ export const WordDefinitionPopover: React.FC<WordDefinitionPopoverProps> = ({
         throw new Error("Invalid spelling audio");
       }
 
+      const spellingLetters = getSpellingLetters(data.word);
+      const letterTimings = ttsAudio.timestamps.slice(0, spellingLetters.length);
+
       stopAllAudio();
       const audio = new Audio(audioSrc);
       spellingAudioRef.current = audio;
       audio.playbackRate = 0.75;
       setSpellingAudioPlaying(true);
+      setCurrentSpellingLetterIndex(-1);
+
+      audio.ontimeupdate = () => {
+        if (!letterTimings.length) return;
+        const t = audio.currentTime;
+        const idx = letterTimings.findIndex((ts) => t >= ts.start && t < ts.end);
+        if (idx >= 0) {
+          setCurrentSpellingLetterIndex(idx);
+        }
+      };
 
       audio.onended = () => {
         setSpellingAudioPlaying(false);
+        setCurrentSpellingLetterIndex(-1);
       };
 
       await audio.play();
@@ -476,7 +512,20 @@ export const WordDefinitionPopover: React.FC<WordDefinitionPopoverProps> = ({
                     <div className="space-y-4 flex flex-col items-center text-center">
                       <p className="text-base text-gray-700 dark:text-gray-300">Hear the letters and say them aloud.</p>
                       <div className="text-xl font-bold tracking-widest text-gray-900 dark:text-white">
-                        {getSpellingPrompt(data.word)}
+                        {getSpellingLetters(data.word).map((letter, index, arr) => (
+                          <React.Fragment key={`${letter}-${index}`}>
+                            <span
+                              className={
+                                index === currentSpellingLetterIndex
+                                  ? "text-blue-600 dark:text-blue-300"
+                                  : "text-gray-900 dark:text-white"
+                              }
+                            >
+                              {letter}
+                            </span>
+                            {index < arr.length - 1 ? "-" : ""}
+                          </React.Fragment>
+                        ))}
                       </div>
                       <div className="flex flex-wrap justify-center gap-3">
                         <button
