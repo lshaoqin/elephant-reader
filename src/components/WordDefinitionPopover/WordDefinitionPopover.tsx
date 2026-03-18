@@ -22,6 +22,12 @@ interface WordDefinitionData {
   part_of_speech?: string;
   example_sentence?: string;
   syllables?: string[];
+  illustration?: {
+    image_url?: string;
+    page_url?: string;
+    title?: string;
+    source?: string;
+  };
   audio?: {
     full_word?: AudioReading;
   };
@@ -344,6 +350,31 @@ export const WordDefinitionPopover: React.FC<WordDefinitionPopoverProps> = ({
                     <p className="text-sm text-indigo-700 dark:text-indigo-300 italic">
                       Example: &quot;{data.example_sentence}&quot;
                     </p>
+                  )}
+
+                  {data.illustration?.image_url && (
+                    <div className="pt-2">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={data.illustration.image_url}
+                        alt={data.illustration.title || `Illustration for ${data.word}`}
+                        className="w-full max-h-56 object-contain rounded-lg border border-indigo-200 dark:border-indigo-700 bg-white/60 dark:bg-slate-900/40"
+                        loading="lazy"
+                      />
+                      {data.illustration.page_url && (
+                        <p className="mt-1 text-xs text-indigo-700 dark:text-indigo-300">
+                          Image source: {" "}
+                          <a
+                            href={data.illustration.page_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="underline hover:opacity-80"
+                          >
+                            Wikimedia
+                          </a>
+                        </p>
+                      )}
+                    </div>
                   )}
                 </div>
 

@@ -7,6 +7,7 @@ from pyphen import Pyphen
 from config import TTS_SAMPLE_RATE
 from services.gemini_service import get_word_learning_data
 from services.google_tts_service import generate_speech_with_word_level_timestamps
+from services.wikimedia_service import fetch_word_illustration
 from utils.firebase_auth import require_firebase_auth
 
 define_word_bp = Blueprint('define_word', __name__)
@@ -99,6 +100,7 @@ def define_word():
             return jsonify({"error": "Could not generate an example sentence"}), 502
 
         syllables = get_syllabification(word) or [word]
+        illustration = fetch_word_illustration(word)
 
         full_word_audio = synthesize_reading_payload(word)
 
@@ -108,6 +110,7 @@ def define_word():
             "part_of_speech": gemini_data.get('part_of_speech'),
             "example_sentence": example_sentence,
             "syllables": syllables,
+            "illustration": illustration,
             "audio": {
                 "full_word": full_word_audio
             }
