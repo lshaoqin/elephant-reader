@@ -106,17 +106,13 @@ Rules:
             model=GEMINI_MODEL,
             contents=prompt
         )
-        parsed = _extract_json_object(response.text.strip() if response.text else "")
-        if parsed:
-            return parsed
     except Exception as e:
-        print(f"Warning: Gemini word learning data failed: {str(e)}")
+        raise RuntimeError(f"Gemini word learning data failed: {str(e)}") from e
 
-    return {
-        "word": word,
-        "simple_definition": "A word used in this sentence.",
-        "example_sentence": f"I use the word {word} every day.",
-        "part_of_speech": "other",
-    }
+    parsed = _extract_json_object(response.text.strip() if response.text else "")
+    if not parsed:
+        raise RuntimeError("Gemini word learning data failed: empty or invalid JSON response")
+
+    return parsed
 
 
