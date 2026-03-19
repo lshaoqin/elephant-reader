@@ -5,6 +5,7 @@ import { FileTextIcon } from "@radix-ui/react-icons";
 import { Button } from "@/components";
 
 interface WordHuntActionsProps {
+  revealLabel?: "singular" | "plural";
   isComplete: boolean;
   hasRevealedAnswers: boolean;
   loading: boolean;
@@ -16,6 +17,7 @@ interface WordHuntActionsProps {
 }
 
 export const WordHuntActions: React.FC<WordHuntActionsProps> = ({
+  revealLabel = "plural",
   isComplete,
   hasRevealedAnswers,
   loading,
@@ -35,7 +37,7 @@ export const WordHuntActions: React.FC<WordHuntActionsProps> = ({
           disabled={loading || isFormatting || !hasData}
           icon={<FileTextIcon className="w-6 h-6" />}
         >
-          Reveal answers
+          {revealLabel === "singular" ? "Reveal answer" : "Reveal answers"}
         </Button>
       )}
       <Button

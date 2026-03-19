@@ -13,6 +13,7 @@ import WordHuntActions from "@/components/WordHunt/WordHuntActions";
 import type { WordHuntData } from "@/components/WordHunt/types";
 import type { TextSettings } from "./SettingsView";
 import { getQuestionAwareTipMessage, getTapSuccessMessage, WordHuntView } from "./WordHuntView";
+import { getFirebaseAuth } from "@/utils/firebase-client";
 
 interface WordTimestamp {
   word: string;
@@ -53,6 +54,8 @@ export const TextView: React.FC<TextViewProps> = ({
   settings,
   onEditClick,
 }) => {
+  type WordHuntMode = "pattern" | "vocabulary";
+
   const [hasAudioLoaded, setHasAudioLoaded] = useState(false);
   const [selectedWord, setSelectedWord] = useState<string | null>(null);
   const [selectedWordContext, setSelectedWordContext] = useState<string>("");
@@ -68,8 +71,11 @@ export const TextView: React.FC<TextViewProps> = ({
   const [revealedAnswers, setRevealedAnswers] = useState(false);
   const [showWordList, setShowWordList] = useState(false);
   const [currentWordHuntQuestionIndex, setCurrentWordHuntQuestionIndex] = useState(0);
+  const [activeWordHuntQuestions, setActiveWordHuntQuestions] = useState<WordHuntData[]>([]);
+  const [selectedWordHuntMode, setSelectedWordHuntMode] = useState<WordHuntMode>("pattern");
   const [isPhonemeAudioPlaying, setIsPhonemeAudioPlaying] = useState(false);
   const wordHuntAudioRef = React.useRef<HTMLAudioElement | null>(null);
+  const vocabularyExcludedWordsRef = React.useRef<Set<string>>(new Set());
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -132,7 +138,13 @@ export const TextView: React.FC<TextViewProps> = ({
   const normalizeToken = useCallback((value: string): string =>
     value.toLowerCase().replace(/[^\w']/g, ""), []);
 
-  const getWordHuntHighlightStyle = useCallback((isSuccess: boolean, isReveal: boolean): CSSProperties | undefined => {
+  const getWordHuntHighlightStyle = useCallback((
+    isSuccess: boolean,
+    isReveal: boolean,
+    isHint: boolean,
+    isHintStart = false,
+    isHintEnd = false
+  ): CSSProperties | undefined => {
     if (isSuccess) {
       return {
         backgroundColor: "#86efac",
@@ -149,6 +161,20 @@ export const TextView: React.FC<TextViewProps> = ({
       };
     }
 
+    if (isHint) {
+      return {
+        backgroundColor: "#dbeafe",
+        borderTop: "1px solid #93c5fd",
+        borderBottom: "1px solid #93c5fd",
+        borderLeft: isHintStart ? "1px solid #93c5fd" : "none",
+        borderRight: isHintEnd ? "1px solid #93c5fd" : "none",
+        borderTopLeftRadius: isHintStart ? "0.2rem" : 0,
+        borderBottomLeftRadius: isHintStart ? "0.2rem" : 0,
+        borderTopRightRadius: isHintEnd ? "0.2rem" : 0,
+        borderBottomRightRadius: isHintEnd ? "0.2rem" : 0,
+      };
+    }
+
     return undefined;
   }, []);
 
@@ -161,27 +187,177 @@ export const TextView: React.FC<TextViewProps> = ({
     return buildWordHuntQuestionPool(displayText, normalizeToken);
   }, [displayText, normalizeToken]);
 
+  const wordHuntHintLineIndexSet = React.useMemo(() => {
+    if (wordHuntData?.mode !== "vocabulary") return new Set<number>();
+    return new Set((wordHuntData.hint_line_indexes || []).filter((value) => Number.isInteger(value) && value >= 0));
+  }, [wordHuntData]);
+
   const disableWordTap = Boolean(wordHuntData) && revealedAnswers;
 
   const wordHuntMarkedIndexes = useCallback((plainText: string) => {
     const successIndexes = new Set<number>();
     const revealIndexes = new Set<number>();
+    const hintIndexes = new Set<number>();
+    let currentLineIndex = 0;
 
     const tokens = plainText.split(/(\s+)/).filter((token) => token.length > 0);
     tokens.forEach((token, index) => {
-      if (/^\s+$/.test(token)) return;
+      if (/^\s+$/.test(token)) {
+        const hasLineBreak = token.includes("\n");
+        if (
+          wordHuntData?.mode === "vocabulary" &&
+          wordHuntHintLineIndexSet.has(currentLineIndex) &&
+          !hasLineBreak
+        ) {
+          hintIndexes.add(index);
+        }
+        currentLineIndex += (token.match(/\n/g) || []).length;
+        return;
+      }
+
       const normalized = normalizeToken(token);
       if (!normalized) return;
+
       if (foundWordKeys.has(normalized)) {
         successIndexes.add(index);
       }
+
       if (revealedAnswers && correctWordKeySet.has(normalized)) {
         revealIndexes.add(index);
       }
+
+      if (
+        wordHuntData?.mode === "vocabulary" &&
+        wordHuntHintLineIndexSet.has(currentLineIndex) &&
+        !successIndexes.has(index) &&
+        !revealIndexes.has(index)
+      ) {
+        hintIndexes.add(index);
+      }
     });
 
-    return { successIndexes, revealIndexes };
-  }, [correctWordKeySet, foundWordKeys, normalizeToken, revealedAnswers]);
+    return { successIndexes, revealIndexes, hintIndexes };
+  }, [correctWordKeySet, foundWordKeys, normalizeToken, revealedAnswers, wordHuntData?.mode, wordHuntHintLineIndexSet]);
+
+  const getRandomVocabularyChunk = useCallback((text: string): { chunkText: string; hintLineIndexes: number[] } => {
+    const plainText = text.replace(/<b>|<\/b>/g, "");
+    if (!plainText.trim()) {
+      return { chunkText: plainText, hintLineIndexes: [] };
+    }
+
+    const sentenceRegex = /[^.!?\n]+[.!?]?/g;
+    const sentences: Array<{ text: string; start: number; end: number; wordCount: number }> = [];
+    let match: RegExpExecArray | null;
+
+    while ((match = sentenceRegex.exec(plainText)) !== null) {
+      const raw = match[0];
+      const trimmed = raw.trim();
+      if (!trimmed) continue;
+      const wordCount = trimmed.split(/\s+/).filter(Boolean).length;
+      sentences.push({
+        text: trimmed,
+        start: match.index,
+        end: match.index + raw.length,
+        wordCount,
+      });
+    }
+
+    if (sentences.length === 0) {
+      const words = plainText.split(/\s+/).filter(Boolean);
+      const chunkText = words.slice(0, 20).join(" ").trim() || plainText;
+      return { chunkText, hintLineIndexes: [0] };
+    }
+
+    const targetWords = 20;
+    const randomIndex = Math.floor(Math.random() * sentences.length);
+    let startSentence = randomIndex;
+    let endSentence = randomIndex;
+    let totalWords = sentences[randomIndex].wordCount;
+
+    while (totalWords < targetWords && (startSentence > 0 || endSentence < sentences.length - 1)) {
+      const canExpandLeft = startSentence > 0;
+      const canExpandRight = endSentence < sentences.length - 1;
+
+      if (canExpandLeft && canExpandRight) {
+        const chooseLeft = Math.random() < 0.5;
+        if (chooseLeft) {
+          startSentence -= 1;
+          totalWords += sentences[startSentence].wordCount;
+        } else {
+          endSentence += 1;
+          totalWords += sentences[endSentence].wordCount;
+        }
+      } else if (canExpandLeft) {
+        startSentence -= 1;
+        totalWords += sentences[startSentence].wordCount;
+      } else if (canExpandRight) {
+        endSentence += 1;
+        totalWords += sentences[endSentence].wordCount;
+      }
+    }
+
+    const startChar = sentences[startSentence].start;
+    const endChar = sentences[endSentence].end;
+    const chunkText = plainText.slice(startChar, endChar).trim() || plainText;
+
+    const prefix = plainText.slice(0, startChar);
+    const chunk = plainText.slice(startChar, endChar);
+    const startLine = (prefix.match(/\n/g) || []).length;
+    const lineSpan = (chunk.match(/\n/g) || []).length + 1;
+    const hintLineIndexes = Array.from({ length: lineSpan }, (_, offset) => startLine + offset);
+
+    return { chunkText, hintLineIndexes };
+  }, []);
+
+  const fetchVocabularyWordHuntQuestion = useCallback(async (): Promise<WordHuntData | null> => {
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+
+    const auth = getFirebaseAuth();
+    const currentUser = auth?.currentUser ?? null;
+    if (currentUser) {
+      const token = await currentUser.getIdToken();
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    const { chunkText, hintLineIndexes } = getRandomVocabularyChunk(displayText);
+    const excludedWords = Array.from(vocabularyExcludedWordsRef.current);
+
+    const response = await fetch("/api/word-hunt", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ text: chunkText, excluded_words: excludedWords }),
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const data = await response.json();
+    const correctWords = Array.isArray(data?.correct_words)
+      ? data.correct_words.map((word: unknown) => String(word).trim()).filter(Boolean)
+      : [];
+
+    if (!data?.question || correctWords.length === 0) {
+      return null;
+    }
+
+    const questionData: WordHuntData = {
+      mode: "vocabulary",
+      question: String(data.question).trim(),
+      correct_words: correctWords,
+      completion_feedback: String(data.completion_feedback || "Great vocabulary spotting!").trim(),
+      hint_line_indexes: hintLineIndexes,
+    };
+
+    questionData.correct_words
+      .map((word) => normalizeToken(word))
+      .filter(Boolean)
+      .forEach((word) => vocabularyExcludedWordsRef.current.add(word));
+
+    return questionData;
+  }, [displayText, getRandomVocabularyChunk, normalizeToken]);
 
   const stopWordHuntAudio = () => {
     if (wordHuntAudioRef.current) {
@@ -215,7 +391,12 @@ export const TextView: React.FC<TextViewProps> = ({
     }
   };
 
-  const startWordHunt = useCallback(async () => {
+  const startWordHunt = useCallback(async (modeOverride?: WordHuntMode) => {
+    const activeMode = modeOverride ?? selectedWordHuntMode;
+    if (modeOverride) {
+      setSelectedWordHuntMode(modeOverride);
+    }
+
     setWordHuntLoading(true);
     setWordHuntFeedback(null);
     setFoundWordKeys(new Set());
@@ -223,22 +404,77 @@ export const TextView: React.FC<TextViewProps> = ({
     setShowWordList(false);
 
     try {
-      if (wordHuntQuestionPool.length === 0) {
+      let questionPool: WordHuntData[] = [];
+
+      if (activeMode === "vocabulary") {
+        if (!wordHuntData) {
+          vocabularyExcludedWordsRef.current.clear();
+        }
+
+        const vocabularyQuestion = await fetchVocabularyWordHuntQuestion().catch(() => null);
+        if (vocabularyQuestion) {
+          questionPool = [vocabularyQuestion];
+        }
+      } else {
+        vocabularyExcludedWordsRef.current.clear();
+        questionPool = wordHuntQuestionPool;
+      }
+
+      if (questionPool.length === 0) {
         setWordHuntData(null);
-        setWordHuntFeedback("Could not create a word hunt right now.");
+        setActiveWordHuntQuestions([]);
+        setWordHuntFeedback(
+          activeMode === "vocabulary"
+            ? "Could not create a vocabulary word hunt right now."
+            : "Could not create a phonetics word hunt right now."
+        );
         return;
       }
 
       const firstIndex = 0;
       setCurrentWordHuntQuestionIndex(firstIndex);
-      setWordHuntData(wordHuntQuestionPool[firstIndex]);
+      setActiveWordHuntQuestions(questionPool);
+      setWordHuntData(questionPool[firstIndex]);
       setWordHuntFeedback(null);
     } catch {
+      setActiveWordHuntQuestions([]);
       setWordHuntFeedback("Could not create a word hunt right now.");
     } finally {
       setWordHuntLoading(false);
     }
-  }, [wordHuntQuestionPool]);
+  }, [fetchVocabularyWordHuntQuestion, selectedWordHuntMode, wordHuntData, wordHuntQuestionPool]);
+
+  const loadNextVocabularyQuestion = useCallback(async () => {
+    setWordHuntLoading(true);
+    setWordHuntFeedback(null);
+
+    try {
+      const nextQuestion = await fetchVocabularyWordHuntQuestion().catch(() => null);
+      if (!nextQuestion) {
+        setWordHuntFeedback("No new vocabulary question available right now.");
+        return;
+      }
+
+      setSelectedWordHuntMode("vocabulary");
+      setCurrentWordHuntQuestionIndex(0);
+      setActiveWordHuntQuestions([nextQuestion]);
+      setWordHuntData(nextQuestion);
+      setFoundWordKeys(new Set());
+      setRevealedAnswers(false);
+      setShowWordList(false);
+      setWordHuntFeedback(null);
+    } finally {
+      setWordHuntLoading(false);
+    }
+  }, [fetchVocabularyWordHuntQuestion]);
+
+  const handleWordHuntModeSwitch = useCallback((mode: WordHuntMode) => {
+    if (mode === selectedWordHuntMode && wordHuntData?.mode === mode) {
+      return;
+    }
+
+    void startWordHunt(mode);
+  }, [selectedWordHuntMode, startWordHunt, wordHuntData?.mode]);
 
   const revealAnswers = useCallback(() => {
     setRevealedAnswers(true);
@@ -251,19 +487,24 @@ export const TextView: React.FC<TextViewProps> = ({
   }, [correctWordKeySet]);
 
   const skipQuestion = useCallback(() => {
-    if (wordHuntQuestionPool.length <= 1) {
+    if (wordHuntData?.mode === "vocabulary") {
+      void loadNextVocabularyQuestion();
+      return;
+    }
+
+    if (activeWordHuntQuestions.length <= 1) {
       setWordHuntFeedback("No other question available for this text.");
       return;
     }
 
-    const nextIndex = (currentWordHuntQuestionIndex + 1) % wordHuntQuestionPool.length;
+    const nextIndex = (currentWordHuntQuestionIndex + 1) % activeWordHuntQuestions.length;
     setCurrentWordHuntQuestionIndex(nextIndex);
-    setWordHuntData(wordHuntQuestionPool[nextIndex]);
+    setWordHuntData(activeWordHuntQuestions[nextIndex]);
     setFoundWordKeys(new Set());
     setRevealedAnswers(false);
     setShowWordList(false);
     setWordHuntFeedback(null);
-  }, [currentWordHuntQuestionIndex, wordHuntQuestionPool]);
+  }, [activeWordHuntQuestions, currentWordHuntQuestionIndex, loadNextVocabularyQuestion, wordHuntData?.mode]);
 
   const nextQuestion = useCallback(() => {
     skipQuestion();
@@ -287,7 +528,9 @@ export const TextView: React.FC<TextViewProps> = ({
       setWordHuntFeedback(getTapSuccessMessage());
 
       if (nextFound.size >= correctWordKeySet.size && correctWordKeySet.size > 0) {
-        const finalFeedback = `${wordHuntData.completion_feedback} ${getQuestionAwareTipMessage(wordHuntData.question)}`;
+        const finalFeedback = wordHuntData.mode === "vocabulary"
+          ? wordHuntData.completion_feedback
+          : `${wordHuntData.completion_feedback} ${getQuestionAwareTipMessage(wordHuntData.question)}`;
         setWordHuntFeedback(finalFeedback);
       }
     }
@@ -408,13 +651,14 @@ export const TextView: React.FC<TextViewProps> = ({
       const plainText = text.replace(/<b>|<\/b>/g, "");
 
       if (settings.fontColor === "gradient") {
-        const { successIndexes, revealIndexes } = wordHuntMarkedIndexes(plainText);
+        const { successIndexes, revealIndexes, hintIndexes } = wordHuntMarkedIndexes(plainText);
         // Apply gradient reading mode based on visual lines
         return (
           <GradientReader
             text={text}
             successWordIndexes={successIndexes}
             revealWordIndexes={revealIndexes}
+            hintWordIndexes={hintIndexes}
             onWordClick={(word) => {
               if (disableWordTap) return;
               handleWordTapForDefinition(word, getSentenceForWordFallback(plainText, word));
@@ -425,6 +669,7 @@ export const TextView: React.FC<TextViewProps> = ({
 
       // Standard mode without gradient reading
       const words = plainText.split(/(\s+)/);
+      const { hintIndexes } = wordHuntMarkedIndexes(plainText);
       
       // Build a map of which character ranges are bold (from HTML)
       const boldRanges: Array<{ start: number; end: number }> = [];
@@ -458,17 +703,29 @@ export const TextView: React.FC<TextViewProps> = ({
             const normalizedPart = normalizeToken(part);
             const isSuccess = foundWordKeys.has(normalizedPart);
             const isReveal = revealedAnswers && correctWordKeySet.has(normalizedPart);
+            const isHint = hintIndexes.has(idx);
+            const isHintStart = isHint && !hintIndexes.has(idx - 1);
+            const isHintEnd = isHint && !hintIndexes.has(idx + 1);
             displayCharPos = partEnd;
 
             // If it's just whitespace, return as-is
             if (/^\s+$/.test(part)) {
-              return <span key={idx}>{part}</span>;
+              return (
+                <span
+                  key={idx}
+                  className={isHint ? "bg-blue-100 dark:bg-blue-800/60" : undefined}
+                  style={getWordHuntHighlightStyle(false, false, isHint, isHintStart, isHintEnd)}
+                >
+                  {part}
+                </span>
+              );
             }
 
             const classes = [
               shouldBold && "font-semibold",
               isSuccess && "bg-yellow-200/90 dark:bg-yellow-700/70 ring-2 ring-yellow-500 rounded-sm px-0.5 underline decoration-2 decoration-yellow-700 dark:decoration-yellow-200",
               isReveal && !isSuccess && "bg-amber-200 dark:bg-amber-700 ring-1 ring-amber-500 rounded-sm px-0.5",
+              isHint && !isSuccess && !isReveal && "bg-blue-100 dark:bg-blue-800/60",
               !disableWordTap && "cursor-pointer hover:underline",
               "transition-all duration-150",
             ]
@@ -479,7 +736,7 @@ export const TextView: React.FC<TextViewProps> = ({
               <span
                 key={idx}
                 className={classes}
-                style={getWordHuntHighlightStyle(isSuccess, isReveal)}
+                style={getWordHuntHighlightStyle(isSuccess, isReveal, isHint, isHintStart, isHintEnd)}
                 onClick={() => {
                   if (disableWordTap) return;
                   handleWordTapForDefinition(
@@ -525,7 +782,7 @@ export const TextView: React.FC<TextViewProps> = ({
 
     // Split text into words while preserving original formatting
     const words = displayText.split(/(\s+)/);
-    const { successIndexes, revealIndexes } = wordHuntMarkedIndexes(displayText);
+    const { successIndexes, revealIndexes, hintIndexes } = wordHuntMarkedIndexes(displayText);
     
     // Build the timestamp to word index mapping (using displayText)
     const timestampWordMap = buildTimestampWordMap(displayText);
@@ -553,6 +810,7 @@ export const TextView: React.FC<TextViewProps> = ({
           highlightedWordIndex={highlightWordIdx}
           successWordIndexes={successIndexes}
           revealWordIndexes={revealIndexes}
+          hintWordIndexes={hintIndexes}
           onWordClick={(_, wordIdx) => {
             if (disableWordTap) return;
             const tappedWord = words[wordIdx] ?? "";
@@ -587,11 +845,22 @@ export const TextView: React.FC<TextViewProps> = ({
           const normalizedPart = normalizeToken(part);
           const isSuccess = foundWordKeys.has(normalizedPart);
           const isReveal = revealedAnswers && correctWordKeySet.has(normalizedPart);
+          const isHint = hintIndexes.has(idx);
+          const isHintStart = isHint && !hintIndexes.has(idx - 1);
+          const isHintEnd = isHint && !hintIndexes.has(idx + 1);
           displayCharPos = partEnd;
 
           // If it's just whitespace, return as-is
           if (/^\s+$/.test(part)) {
-            return <span key={idx}>{part}</span>;
+            return (
+              <span
+                key={idx}
+                className={isHint ? "bg-blue-100 dark:bg-blue-800/60" : undefined}
+                style={getWordHuntHighlightStyle(false, false, isHint, isHintStart, isHintEnd)}
+              >
+                {part}
+              </span>
+            );
           }
 
           const classes = [
@@ -599,6 +868,7 @@ export const TextView: React.FC<TextViewProps> = ({
             shouldBold && "font-semibold",
             isSuccess && "bg-yellow-200/90 dark:bg-yellow-700/70 ring-2 ring-yellow-500 rounded-sm px-0.5 underline decoration-2 decoration-yellow-700 dark:decoration-yellow-200",
             isReveal && !isSuccess && "bg-amber-200 dark:bg-amber-700 ring-1 ring-amber-500 rounded-sm px-0.5",
+            isHint && !isSuccess && !isReveal && "bg-blue-100 dark:bg-blue-800/60",
             !disableWordTap && "cursor-pointer hover:opacity-70",
             "transition-all duration-75 ease-in-out",
           ]
@@ -612,7 +882,7 @@ export const TextView: React.FC<TextViewProps> = ({
             <span 
               key={idx} 
               className={classes}
-              style={getWordHuntHighlightStyle(isSuccess, isReveal)}
+              style={getWordHuntHighlightStyle(isSuccess, isReveal, isHint, isHintStart, isHintEnd)}
               onClick={() => {
                 if (disableWordTap) return;
                 if (handleWordTapForWordHunt(part)) {
@@ -680,6 +950,7 @@ export const TextView: React.FC<TextViewProps> = ({
 
   const showMediaPlayer = isListeningMode && (isLoadingAudio || isPlayingAudio || hasAudioLoaded);
   const isWordHuntMode = Boolean(wordHuntData);
+  const currentWordHuntMode: WordHuntMode = wordHuntData?.mode === "vocabulary" ? "vocabulary" : "pattern";
   const isWordHuntComplete = correctWordKeySet.size > 0 && foundWordKeys.size >= correctWordKeySet.size;
   const shouldShowWordList = showWordList || revealedAnswers || isWordHuntComplete;
 
@@ -698,6 +969,8 @@ export const TextView: React.FC<TextViewProps> = ({
       setRevealedAnswers(false);
       setShowWordList(false);
       setCurrentWordHuntQuestionIndex(0);
+      setActiveWordHuntQuestions([]);
+      vocabularyExcludedWordsRef.current.clear();
       return;
     }
 
@@ -734,6 +1007,10 @@ export const TextView: React.FC<TextViewProps> = ({
         {wordHuntData && (
           <WordHuntView
             wordHuntData={wordHuntData}
+            selectedMode={currentWordHuntMode}
+            onSelectMode={handleWordHuntModeSwitch}
+            modeSwitchLoading={wordHuntLoading}
+            showWordListToggle={wordHuntData.mode !== "vocabulary"}
             foundCount={foundWordKeys.size}
             totalCount={correctWordKeySet.size}
             isPhonemeAudioPlaying={isPhonemeAudioPlaying}
@@ -794,6 +1071,7 @@ export const TextView: React.FC<TextViewProps> = ({
       <div className="flex gap-4 p-6 bg-white dark:bg-slate-900 border-t-4 border-yellow-500 flex-wrap justify-center">
         {isWordHuntMode ? (
           <WordHuntActions
+            revealLabel={currentWordHuntMode === "vocabulary" ? "singular" : "plural"}
             isComplete={isWordHuntComplete}
             hasRevealedAnswers={revealedAnswers}
             loading={wordHuntLoading}

@@ -57,6 +57,7 @@ export function buildWordHuntQuestionPool(
     .filter((item) => item.words.length > 0)
     .sort((left, right) => right.words.length - left.words.length)
     .map((item) => ({
+      mode: "pattern" as const,
       question: item.question,
       correct_words: item.words.slice(0, 8),
       completion_feedback: "Great spotting! You found the pattern words.",
@@ -68,6 +69,7 @@ export function buildWordHuntQuestionPool(
 
   return [
     {
+      mode: "pattern",
       question: "Tap words with blends or digraphs.",
       correct_words: words.slice(0, 4),
       completion_feedback: "Nice effort! Let's try another word hunt.",

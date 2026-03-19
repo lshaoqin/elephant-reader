@@ -8,6 +8,7 @@ from config import GEMINI_MODEL
 
 # Initialize Gemini client
 genai_client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+WORD_HUNT_MODEL = "gemini-2.5-flash"
 
 
 def _extract_json_object(raw_text: str) -> dict:
@@ -114,5 +115,75 @@ Rules:
         raise RuntimeError("Gemini word learning data failed: empty or invalid JSON response")
 
     return parsed
+
+
+def get_word_hunt_vocabulary_data(text: str, excluded_words: list[str] | None = None) -> dict:
+    """Generate a vocabulary-style word hunt question from source text.
+
+    Returns:
+        Dict with keys: question, correct_words, completion_feedback.
+    """
+    cleaned_text = (text or "").strip()
+    if not cleaned_text:
+        raise ValueError("No text provided for vocabulary word hunt")
+
+    filtered_excluded = [str(word).strip() for word in (excluded_words or []) if str(word).strip()]
+    excluded_block = ", ".join(filtered_excluded) if filtered_excluded else "(none)"
+
+    prompt = f"""You are creating a child-friendly vocabulary word-hunt game.
+
+Given this source text, choose one meaningful vocabulary word that appears exactly in the source text.
+Then write a simple clue/definition and game feedback.
+
+Source text:
+{cleaned_text}
+
+Words you MUST NOT choose as the target word:
+{excluded_block}
+
+Return ONLY valid JSON in this exact shape:
+{{
+  "question": "Tap the word that means ...",
+  "correct_words": ["exact-word-from-source-text"],
+  "completion_feedback": "Short encouraging feedback sentence."
+}}
+
+Rules:
+- Use exactly one target word in correct_words.
+- The target word must be copied exactly from the source text spelling.
+- Do not choose any word listed in the forbidden words list above.
+- Keep question under 18 words.
+- Keep completion_feedback under 14 words.
+- Do not include markdown or extra keys.
+"""
+
+    try:
+        response = genai_client.models.generate_content(
+            model=WORD_HUNT_MODEL,
+            contents=prompt
+        )
+    except Exception as e:
+        raise RuntimeError(f"Gemini vocabulary word hunt failed: {str(e)}") from e
+
+    parsed = _extract_json_object(response.text.strip() if response.text else "")
+    if not parsed:
+        raise RuntimeError("Gemini vocabulary word hunt failed: empty or invalid JSON response")
+
+    question = str(parsed.get("question", "")).strip()
+    completion_feedback = str(parsed.get("completion_feedback", "")).strip()
+    words = parsed.get("correct_words")
+
+    if not isinstance(words, list):
+        raise RuntimeError("Gemini vocabulary word hunt failed: correct_words must be a list")
+
+    correct_words = [str(word).strip() for word in words if str(word).strip()]
+    if not question or not completion_feedback or not correct_words:
+        raise RuntimeError("Gemini vocabulary word hunt failed: missing required fields")
+
+    return {
+        "question": question,
+        "correct_words": correct_words[:1],
+        "completion_feedback": completion_feedback,
+    }
 
 

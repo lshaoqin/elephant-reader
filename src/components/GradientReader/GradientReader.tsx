@@ -19,6 +19,7 @@ interface GradientReaderProps {
   highlightedWordIndex?: number;
   successWordIndexes?: Set<number>;
   revealWordIndexes?: Set<number>;
+  hintWordIndexes?: Set<number>;
 }
 
 const BLACK = "#1a1a1a";
@@ -73,6 +74,7 @@ export const GradientReader: React.FC<GradientReaderProps> = ({
   highlightedWordIndex,
   successWordIndexes,
   revealWordIndexes,
+  hintWordIndexes,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const wordRefsRef = useRef<(HTMLSpanElement | null)[]>([]);
@@ -206,39 +208,62 @@ export const GradientReader: React.FC<GradientReaderProps> = ({
   return (
     <div ref={containerRef}>
       {(coloredWords.length > 0 ? coloredWords : words.map(w => ({ ...w, color: BLACK }))).map((word, idx) => (
-        <span
-          key={idx}
-          ref={(el) => {
-            wordRefsRef.current[idx] = el;
-          }}
-          style={{
-            color: word.color,
-            fontWeight: word.isBold ? "bold" : "normal",
-            backgroundColor: successWordIndexes?.has(idx)
-              ? "#86efac"
-              : revealWordIndexes?.has(idx) && !successWordIndexes?.has(idx)
-                ? "#fde68a"
-                : undefined,
-          }}
-          className={[
-            !word.isWhitespace && onWordClick ? "cursor-pointer hover:underline" : "",
-            idx === highlightedWordIndex ? "bg-yellow-300 dark:bg-yellow-500 rounded-sm" : "",
-            successWordIndexes?.has(idx)
-              ? "bg-yellow-200/90 dark:bg-yellow-700/70 rounded-sm ring-2 ring-yellow-500 underline decoration-2 decoration-yellow-700 dark:decoration-yellow-200"
-              : "",
-            revealWordIndexes?.has(idx) && !successWordIndexes?.has(idx)
-              ? "bg-amber-200 dark:bg-amber-700 rounded-sm ring-1 ring-amber-500"
-              : "",
-            "transition-all duration-75 ease-in-out",
-          ].filter(Boolean).join(" ")}
-          onClick={() => {
-            if (!word.isWhitespace && onWordClick) {
-              onWordClick(word.text, idx);
-            }
-          }}
-        >
-          {word.text}
-        </span>
+        (() => {
+          const isSuccess = Boolean(successWordIndexes?.has(idx));
+          const isReveal = Boolean(revealWordIndexes?.has(idx)) && !isSuccess;
+          const isHint = Boolean(hintWordIndexes?.has(idx)) && !isSuccess && !isReveal;
+          const isHintStart = isHint && !hintWordIndexes?.has(idx - 1);
+          const isHintEnd = isHint && !hintWordIndexes?.has(idx + 1);
+
+          return (
+            <span
+              key={idx}
+              ref={(el) => {
+                wordRefsRef.current[idx] = el;
+              }}
+              style={{
+                color: word.color,
+                fontWeight: word.isBold ? "bold" : "normal",
+                backgroundColor: isSuccess
+                  ? "#86efac"
+                  : isReveal
+                    ? "#fde68a"
+                    : isHint
+                      ? "#dbeafe"
+                      : undefined,
+                borderTop: isHint ? "1px solid #93c5fd" : undefined,
+                borderBottom: isHint ? "1px solid #93c5fd" : undefined,
+                borderLeft: isHintStart ? "1px solid #93c5fd" : undefined,
+                borderRight: isHintEnd ? "1px solid #93c5fd" : undefined,
+                borderTopLeftRadius: isHintStart ? "0.2rem" : undefined,
+                borderBottomLeftRadius: isHintStart ? "0.2rem" : undefined,
+                borderTopRightRadius: isHintEnd ? "0.2rem" : undefined,
+                borderBottomRightRadius: isHintEnd ? "0.2rem" : undefined,
+              }}
+              className={[
+                !word.isWhitespace && onWordClick ? "cursor-pointer hover:underline" : "",
+                idx === highlightedWordIndex ? "bg-yellow-300 dark:bg-yellow-500 rounded-sm" : "",
+                isSuccess
+                  ? "bg-yellow-200/90 dark:bg-yellow-700/70 rounded-sm ring-2 ring-yellow-500 underline decoration-2 decoration-yellow-700 dark:decoration-yellow-200"
+                  : "",
+                isReveal
+                  ? "bg-amber-200 dark:bg-amber-700 rounded-sm ring-1 ring-amber-500"
+                  : "",
+                isHint
+                  ? "bg-blue-100 dark:bg-blue-800/60"
+                  : "",
+                "transition-all duration-75 ease-in-out",
+              ].filter(Boolean).join(" ")}
+              onClick={() => {
+                if (!word.isWhitespace && onWordClick) {
+                  onWordClick(word.text, idx);
+                }
+              }}
+            >
+              {word.text}
+            </span>
+          );
+        })()
       ))}
     </div>
   );
