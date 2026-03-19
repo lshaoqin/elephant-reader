@@ -1,3 +1,5 @@
+import { getFirebaseAuth } from "@/utils/firebase-client";
+
 export interface SavedWordTimestamp {
   word: string;
   start: number;
@@ -42,20 +44,56 @@ export interface SavedDocumentSummary {
   createdAtMs: number;
 }
 
+function getBackendUrl(): string {
+  const url = (process.env.NEXT_PUBLIC_PYTHON_BACKEND_URL || "").trim();
+  return url.replace(/\/+$/, "");
+}
+
+async function getAuthToken(): Promise<string | null> {
+  const auth = getFirebaseAuth();
+  const user = auth?.currentUser ?? null;
+  if (!user) return null;
+
+  try {
+    return await user.getIdToken();
+  } catch {
+    return null;
+  }
+}
+
 export async function saveUserDocument(params: {
   existingDocumentId?: string | null;
   payload: SavedDocumentPayload;
   title?: string;
 }): Promise<string> {
-  const response = await fetch("/api/user-files", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      existing_document_id: params.existingDocumentId,
-      title: params.title,
-      payload: params.payload,
-    }),
-  });
+  const requestBody = {
+    existing_document_id: params.existingDocumentId,
+    title: params.title,
+    payload: params.payload,
+  };
+
+  const backendUrl = getBackendUrl();
+  const token = await getAuthToken();
+
+  let response: Response;
+
+  // Prefer direct backend POST for large payloads to avoid serverless body size limits.
+  if (backendUrl && token) {
+    response = await fetch(`${backendUrl}/user-files`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(requestBody),
+    });
+  } else {
+    response = await fetch("/api/user-files", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(requestBody),
+    });
+  }
 
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
