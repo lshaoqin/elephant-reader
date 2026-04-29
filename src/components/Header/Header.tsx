@@ -1,5 +1,6 @@
 import React, { ReactNode } from "react";
 import { ArrowLeftIcon, GearIcon, PersonIcon } from "@radix-ui/react-icons";
+import { HelpPopover } from "../HelpPopover/HelpPopover";
 
 interface HeaderProps {
   onBackClick?: () => void;
@@ -69,7 +70,8 @@ export const Header: React.FC<HeaderProps> = ({
       {children}
 
       {/* Right: Settings & Profile Icons */}
-      <div className="flex-1 flex justify-end gap-6">
+      <div className="flex-1 flex justify-end gap-6 items-center">
+        <HelpPopover />
         {showSettings && (
           <button onClick={onSettingsClick} className="text-gray-600 dark:text-gray-400 hover:text-yellow-500 transition-colors">
             <GearIcon className="w-7 h-7" />

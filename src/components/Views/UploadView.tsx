@@ -7,8 +7,9 @@ import {
   FileTextIcon,
   Pencil2Icon,
   GearIcon,
+  QuestionMarkCircledIcon,
 } from "@radix-ui/react-icons";
-import { LoadingSpinner, ViewBox } from "@/components";
+import { LoadingSpinner, ViewBox, HelpPopover } from "@/components";
 import type { TextSettings } from "./SettingsView";
 
 interface UploadViewProps {
@@ -136,21 +137,38 @@ export const UploadView: React.FC<UploadViewProps> = ({
               </span>
             </button>
           )}
-          {onSettingsClick && (
-            <button
-              onClick={onSettingsClick}
-              disabled={loading}
-              className="flex flex-row items-center justify-center gap-3 px-8 py-4 border-2 border-gray-400 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors w-full max-w-md disabled:cursor-not-allowed"
-            >
-              <GearIcon className="w-6 h-6 text-gray-600 dark:text-gray-400 transition-colors" />
-              <span
-                className="font-semibold text-base text-gray-600 dark:text-gray-400"
-                style={{ fontFamily: getFontFamily() }}
+          <div className="grid grid-cols-2 gap-4 w-full max-w-md">
+            {onSettingsClick && (
+              <button
+                onClick={onSettingsClick}
+                disabled={loading}
+                className="flex flex-row items-center justify-center gap-2 md:gap-3 px-4 py-4 border-2 border-gray-400 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors w-full disabled:cursor-not-allowed"
               >
-                Settings
-              </span>
-            </button>
-          )}
+                <GearIcon className="w-5 h-5 md:w-6 md:h-6 text-gray-600 dark:text-gray-400 transition-colors" />
+                <span
+                  className="font-semibold text-sm md:text-base text-gray-600 dark:text-gray-400"
+                  style={{ fontFamily: getFontFamily() }}
+                >
+                  Settings
+                </span>
+              </button>
+            )}
+
+            <HelpPopover>
+              <button
+                disabled={loading}
+                className="flex flex-row items-center justify-center gap-2 md:gap-3 px-4 py-4 border-2 border-gray-400 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors w-full disabled:cursor-not-allowed"
+              >
+                <QuestionMarkCircledIcon className="w-5 h-5 md:w-6 md:h-6 text-gray-600 dark:text-gray-400 transition-colors" />
+                <span
+                  className="font-semibold text-sm md:text-base text-gray-600 dark:text-gray-400"
+                  style={{ fontFamily: getFontFamily() }}
+                >
+                  Help
+                </span>
+              </button>
+            </HelpPopover>
+          </div>
         </div>
         {authSection && (
           <div className="w-full max-w-2xl">
