@@ -21,6 +21,12 @@ interface WordTimestamp {
   end: number;
 }
 
+interface WordHuntWordAudio {
+  audio: string;
+  sample_rate: number;
+  audio_mime_type?: string;
+}
+
 interface TextViewProps {
   displayText: string;
   isFormatting: boolean;
@@ -74,6 +80,7 @@ export const TextView: React.FC<TextViewProps> = ({
   const [activeWordHuntQuestions, setActiveWordHuntQuestions] = useState<WordHuntData[]>([]);
   const [selectedWordHuntMode, setSelectedWordHuntMode] = useState<WordHuntMode>("pattern");
   const [isPhonemeAudioPlaying, setIsPhonemeAudioPlaying] = useState(false);
+  const [wordHuntWordAudioCache, setWordHuntWordAudioCache] = useState<Record<string, WordHuntWordAudio>>({});
   const wordHuntAudioRef = React.useRef<HTMLAudioElement | null>(null);
   const vocabularyExcludedWordsRef = React.useRef<Set<string>>(new Set());
 
@@ -339,6 +346,31 @@ export const TextView: React.FC<TextViewProps> = ({
       ? data.correct_words.map((word: unknown) => String(word).trim()).filter(Boolean)
       : [];
 
+    const wordAudioRaw = data?.word_audio;
+    const wordAudio: WordHuntData["word_audio"] =
+      wordAudioRaw && typeof wordAudioRaw === "object" && !Array.isArray(wordAudioRaw)
+        ? Object.entries(wordAudioRaw).reduce<NonNullable<WordHuntData["word_audio"]>>((acc, [word, payload]) => {
+            if (
+              typeof payload === "object" &&
+              payload !== null &&
+              typeof (payload as { audio?: unknown }).audio === "string"
+            ) {
+              acc[word] = {
+                audio: (payload as { audio: string }).audio,
+                sample_rate:
+                  typeof (payload as { sample_rate?: unknown }).sample_rate === "number"
+                    ? (payload as { sample_rate: number }).sample_rate
+                    : 24000,
+                audio_mime_type:
+                  typeof (payload as { audio_mime_type?: unknown }).audio_mime_type === "string"
+                    ? (payload as { audio_mime_type: string }).audio_mime_type
+                    : "audio/wav",
+              };
+            }
+            return acc;
+          }, {})
+        : undefined;
+
     if (!data?.question || correctWords.length === 0) {
       return null;
     }
@@ -349,6 +381,7 @@ export const TextView: React.FC<TextViewProps> = ({
       correct_words: correctWords,
       completion_feedback: String(data.completion_feedback || "Great vocabulary spotting!").trim(),
       hint_line_indexes: hintLineIndexes,
+      word_audio: wordAudio,
     };
 
     questionData.correct_words
@@ -359,20 +392,102 @@ export const TextView: React.FC<TextViewProps> = ({
     return questionData;
   }, [displayText, getRandomVocabularyChunk, normalizeToken]);
 
-  const stopWordHuntAudio = () => {
+  const stopWordHuntAudio = useCallback(() => {
     if (wordHuntAudioRef.current) {
       wordHuntAudioRef.current.pause();
       wordHuntAudioRef.current.currentTime = 0;
       wordHuntAudioRef.current = null;
     }
     setIsPhonemeAudioPlaying(false);
-  };
+  }, []);
 
   useEffect(() => {
     return () => {
       stopWordHuntAudio();
     };
-  }, []);
+  }, [stopWordHuntAudio]);
+
+  const playWordHuntWordAudioFromPayload = useCallback(async (audioPayload: WordHuntWordAudio) => {
+    stopWordHuntAudio();
+
+    const mimeType = audioPayload.audio_mime_type || "audio/wav";
+    const audio = new Audio(`data:${mimeType};base64,${audioPayload.audio}`);
+    wordHuntAudioRef.current = audio;
+    audio.onended = () => setIsPhonemeAudioPlaying(false);
+
+    try {
+      await audio.play();
+      setIsPhonemeAudioPlaying(true);
+    } catch {
+      setIsPhonemeAudioPlaying(false);
+    }
+  }, [stopWordHuntAudio]);
+
+  const resolveEmbeddedWordAudio = useCallback((rawWord: string, normalizedKey: string): WordHuntWordAudio | null => {
+    const audioMap = wordHuntData?.word_audio;
+    if (!audioMap) return null;
+
+    const direct = audioMap[rawWord] || audioMap[normalizedKey];
+    if (direct?.audio) {
+      return direct;
+    }
+
+    for (const [candidateWord, payload] of Object.entries(audioMap)) {
+      if (normalizeToken(candidateWord) === normalizedKey && payload?.audio) {
+        return payload;
+      }
+    }
+
+    return null;
+  }, [normalizeToken, wordHuntData?.word_audio]);
+
+  const fetchWordTapAudio = useCallback(async (rawWord: string, normalizedKey: string): Promise<WordHuntWordAudio | null> => {
+    const cached = wordHuntWordAudioCache[normalizedKey];
+    if (cached?.audio) {
+      return cached;
+    }
+
+    const cleanWord = rawWord.trim().replace(/^[^\w']+|[^\w']+$/g, "");
+    if (!cleanWord) {
+      return null;
+    }
+
+    try {
+      const response = await fetch("/api/tts/google", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: cleanWord,
+          provider: "google",
+          voice_name: "en-US-Neural2-H",
+        }),
+      });
+
+      if (!response.ok) {
+        return null;
+      }
+
+      const data = await response.json();
+      if (data?.status !== "complete" || typeof data?.audio !== "string") {
+        return null;
+      }
+
+      const payload: WordHuntWordAudio = {
+        audio: data.audio,
+        sample_rate: typeof data?.sample_rate === "number" ? data.sample_rate : 24000,
+        audio_mime_type: typeof data?.audio_mime_type === "string" ? data.audio_mime_type : "audio/wav",
+      };
+
+      setWordHuntWordAudioCache((prev) => ({
+        ...prev,
+        [normalizedKey]: payload,
+      }));
+
+      return payload;
+    } catch {
+      return null;
+    }
+  }, [wordHuntWordAudioCache]);
 
   const playWordHuntAudio = async () => {
     const base64Audio = wordHuntData?.phoneme_audio?.audio;
@@ -521,6 +636,18 @@ export const TextView: React.FC<TextViewProps> = ({
       return true;
     }
 
+    const embeddedAudio = resolveEmbeddedWordAudio(rawWord, key);
+    if (embeddedAudio) {
+      void playWordHuntWordAudioFromPayload(embeddedAudio);
+    } else {
+      void (async () => {
+        const fetchedAudio = await fetchWordTapAudio(rawWord, key);
+        if (fetchedAudio) {
+          await playWordHuntWordAudioFromPayload(fetchedAudio);
+        }
+      })();
+    }
+
     if (!foundWordKeys.has(key)) {
       const nextFound = new Set(foundWordKeys);
       nextFound.add(key);
@@ -536,7 +663,7 @@ export const TextView: React.FC<TextViewProps> = ({
     }
 
     return true;
-  }, [wordHuntData, correctWordKeySet, foundWordKeys, normalizeToken]);
+  }, [wordHuntData, correctWordKeySet, foundWordKeys, normalizeToken, resolveEmbeddedWordAudio, fetchWordTapAudio, playWordHuntWordAudioFromPayload]);
 
   const handleWordTapForDefinition = useCallback((word: string, sentenceContext: string) => {
     if (handleWordTapForWordHunt(word)) return;
@@ -982,7 +1109,7 @@ export const TextView: React.FC<TextViewProps> = ({
     }
 
     onBackClick();
-  }, [isParagraphMode, isWordHuntMode, showMediaPlayer, onStopAudio, onBackClick]);
+  }, [isParagraphMode, isWordHuntMode, showMediaPlayer, onStopAudio, onBackClick, stopWordHuntAudio]);
 
   return (
     <>
