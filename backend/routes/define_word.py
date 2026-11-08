@@ -94,6 +94,8 @@ def define_word():
         context_sentence = str(data.get('context_sentence', '') or '').strip()
         language_code = str(data.get('language_code', '') or '').strip() or 'en-US'
         voice_name = str(data.get('voice_name', '') or '').strip() or 'en-US-Neural2-H'
+        include_illustration = data.get('include_illustration', True)
+        include_illustration = bool(include_illustration)
 
         gemini_data = get_word_learning_data(word=word, context_sentence=context_sentence, language_code=language_code)
 
@@ -106,7 +108,13 @@ def define_word():
             return jsonify({"error": "Could not generate an example sentence"}), 502
 
         syllables = get_syllabification(word, language_code=language_code) or [word]
-        illustration = fetch_word_illustration(word)
+        illustration = (
+            fetch_word_illustration(
+                word,
+                context_sentence=context_sentence,
+                language_code=language_code,
+            ) if include_illustration else None
+        )
 
         full_word_audio = synthesize_reading_payload(
             word,

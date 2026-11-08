@@ -11,6 +11,9 @@ export async function GET(
   if (authResult instanceof NextResponse) return authResult;
 
   const { documentId } = await context.params;
+
+  if (!authResult) return new NextResponse("Unauthorized", { status: 401 });
+
   const backendUrl = process.env.PYTHON_BACKEND_URL || "http://localhost:8080";
 
   const response = await fetch(`${backendUrl}/user-files/${documentId}`, {
@@ -32,6 +35,9 @@ export async function DELETE(
   if (authResult instanceof NextResponse) return authResult;
 
   const { documentId } = await context.params;
+
+  if (!authResult) return new NextResponse("Unauthorized", { status: 401 });
+
   const backendUrl = process.env.PYTHON_BACKEND_URL || "http://localhost:8080";
 
   const response = await fetch(`${backendUrl}/user-files/${documentId}`, {
