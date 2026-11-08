@@ -43,6 +43,8 @@ interface WordDefinitionData {
     page_url?: string;
     title?: string;
     source?: string;
+    source_name?: string;
+    source_url?: string;
   };
   audio?: {
     full_word?: AudioReading;
@@ -66,6 +68,7 @@ export const WordDefinitionPopover: React.FC<WordDefinitionPopoverProps> = ({
 }) => {
   const [data, setData] = useState<WordDefinitionData | null>(null);
   const [loading, setLoading] = useState(false);
+  const [illustrationLoading, setIllustrationLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [playingAudio, setPlayingAudio] = useState(false);
   const [showPractice, setShowPractice] = useState(false);
@@ -244,14 +247,50 @@ export const WordDefinitionPopover: React.FC<WordDefinitionPopoverProps> = ({
     setSpellingFeedback(isCorrect ? "correct" : "incorrect");
   };
 
+  const loadIllustration = useCallback(async () => {
+    if (!isOpen || !word || illustrationLoading) return;
+
+    setIllustrationLoading(true);
+    try {
+      const ttsConfig = getTtsVoiceConfig(textSettings.readingLanguage);
+      const response = await fetch("/api/define-word", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          word,
+          contextSentence: contextSentence || "",
+          language_code: ttsConfig.languageCode,
+          voice_name: ttsConfig.voiceName,
+          include_illustration: true,
+        }),
+      });
+
+      if (!response.ok) return;
+
+      const result = await response.json();
+      setData((current) => {
+        const next = current ? { ...current, illustration: result.illustration || null } : result;
+        const cacheKey = `${normalizeWordForCache(word)}|${contextSentence || ""}`;
+        definitionCache.set(cacheKey, next);
+        return next;
+      });
+    } catch {
+      // Intentionally ignore illustration fetch failures so the definition stays visible.
+    } finally {
+      setIllustrationLoading(false);
+    }
+  }, [contextSentence, illustrationLoading, isOpen, textSettings.readingLanguage, word]);
+
   const loadDefinition = useCallback(async () => {
     if (!isOpen || !word) return;
 
     const cacheKey = `${normalizeWordForCache(word)}|${contextSentence || ""}`;
     const cached = definitionCache.get(cacheKey);
     if (cached) {
-      const cachedData = cached;
-      setData(cachedData);
+      setData(cached);
+      if (!cached.illustration) {
+        void loadIllustration();
+      }
       return;
     }
 
@@ -267,6 +306,7 @@ export const WordDefinitionPopover: React.FC<WordDefinitionPopoverProps> = ({
           contextSentence: contextSentence || "",
           language_code: ttsConfig.languageCode,
           voice_name: ttsConfig.voiceName,
+          include_illustration: false,
         }),
       });
 
@@ -284,12 +324,15 @@ export const WordDefinitionPopover: React.FC<WordDefinitionPopoverProps> = ({
       const result = await response.json();
       definitionCache.set(cacheKey, result);
       setData(result);
+      if (!result.illustration) {
+        void loadIllustration();
+      }
     } catch {
       setError("There was a problem fetching the meaning of this word.");
     } finally {
       setLoading(false);
     }
-  }, [isOpen, word, contextSentence, textSettings.readingLanguage]);
+  }, [contextSentence, isOpen, loadIllustration, textSettings.readingLanguage, word]);
 
   useEffect(() => {
     if (!isOpen || !word) return;
@@ -389,6 +432,7 @@ export const WordDefinitionPopover: React.FC<WordDefinitionPopoverProps> = ({
     write: "Check",
   };
   const currentStepIndex = stepOrder.indexOf(practiceStep);
+  const hasIllustration = Boolean(data?.illustration?.image_url && data.illustration.image_url.trim());
 
   return (
     <>
@@ -480,27 +524,40 @@ export const WordDefinitionPopover: React.FC<WordDefinitionPopoverProps> = ({
                     </p>
                   )}
 
-                  {data.illustration?.image_url && !showPractice && (
+                  {!showPractice && (
                     <div className="pt-2">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={data.illustration.image_url}
-                        alt={data.illustration.title || `Illustration for ${data.word}`}
-                        className="w-full max-h-56 object-contain rounded-lg border border-indigo-200 dark:border-indigo-700 bg-white/60 dark:bg-slate-900/40"
-                        loading="lazy"
-                      />
-                      {data.illustration.page_url && (
-                        <p className="mt-1 text-xs text-indigo-700 dark:text-indigo-300">
-                          Image source: {" "}
-                          <a
-                            href={data.illustration.page_url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="underline hover:opacity-80"
-                          >
-                            Wikimedia
-                          </a>
-                        </p>
+                      {illustrationLoading && !hasIllustration && (
+                        <div className="flex min-h-28 items-center justify-center rounded-lg border border-dashed border-indigo-200 bg-white/50 dark:border-indigo-700 dark:bg-slate-900/30">
+                          <div className="flex items-center gap-2 text-sm text-indigo-700 dark:text-indigo-300">
+                            <div className="h-4 w-4 animate-spin rounded-full border-2 border-indigo-300 border-t-indigo-600 dark:border-indigo-700 dark:border-t-indigo-300" />
+                            Looking for a picture...
+                          </div>
+                        </div>
+                      )}
+
+                      {hasIllustration && (
+                        <>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={data.illustration?.image_url}
+                            alt={data.illustration?.title || `Illustration for ${data.word}`}
+                            className="w-full max-h-56 object-contain rounded-lg border border-indigo-200 dark:border-indigo-700 bg-white/60 dark:bg-slate-900/40"
+                            loading="lazy"
+                          />
+                          {(data.illustration?.page_url || data.illustration?.source_url) && (
+                            <p className="mt-1 text-xs text-indigo-700 dark:text-indigo-300">
+                              Image source: {" "}
+                              <a
+                                href={data.illustration?.page_url || data.illustration?.source_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="underline hover:opacity-80"
+                              >
+                                {data.illustration?.source_name || data.illustration?.source || "Web source"}
+                              </a>
+                            </p>
+                          )}
+                        </>
                       )}
                     </div>
                   )}

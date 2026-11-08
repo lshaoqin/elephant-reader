@@ -93,6 +93,7 @@ function saveSettingsToCookie(settings: TextSettings) {
 
 export default function Page() {
   const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
+  const [appSessionUsername, setAppSessionUsername] = useState<string>("");
   const [authLoading, setAuthLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [savedFiles, setSavedFiles] = useState<SavedDocumentSummary[]>([]);
@@ -167,9 +168,27 @@ export default function Page() {
   }, []);
 
   useEffect(() => {
+    const appSessionCookie = typeof document !== "undefined"
+      ? document.cookie
+          .split("; ")
+          .find((row) => row.startsWith("app_session="))
+      : undefined;
+
+    const appSessionUser = appSessionCookie ? decodeURIComponent(appSessionCookie.slice("app_session=".length)) : "";
+
+    if (appSessionUser) {
+      setFirebaseUser(null);
+      setAppSessionUsername(appSessionUser);
+      setIsAuthenticated(true);
+      setAuthLoading(false);
+      return;
+    }
+
     const auth = getFirebaseAuth();
     if (!auth) {
-      setError("Firebase Auth is not configured. Please set Firebase environment variables.");
+      setFirebaseUser(null);
+      setAppSessionUsername("");
+      setIsAuthenticated(false);
       setAuthLoading(false);
       return;
     }
@@ -177,6 +196,7 @@ export default function Page() {
     const unsubscribe = onIdTokenChanged(auth, async (user: User | null) => {
       if (!user) {
         setFirebaseUser(null);
+        setAppSessionUsername("");
         setIsAuthenticated(false);
         await fetch("/api/auth/session", { method: "DELETE" });
         clearSavedWordsAuth();
@@ -197,6 +217,7 @@ export default function Page() {
           throw new Error("Failed to establish authenticated session");
         }
         setFirebaseUser(user);
+        setAppSessionUsername(user.phoneNumber || "");
         setIsAuthenticated(true);
         setSavedWordsAuth(idToken);
       } catch (authErr) {
@@ -328,6 +349,30 @@ export default function Page() {
     }
   }, []);
 
+  const handleSignOut = React.useCallback(async () => {
+    const auth = getFirebaseAuth();
+    try {
+      await fetch("/api/auth/session", { method: "DELETE" });
+      await auth?.signOut();
+    } catch {
+      // ignore cleanup failures
+    }
+
+    setFirebaseUser(null);
+    setAppSessionUsername("");
+    setIsAuthenticated(false);
+    setActiveSavedDocumentId(null);
+    setAudioCacheStore({});
+    setFormattedCache({});
+    setFormattedState({});
+    setResults([]);
+    setSavedFiles([]);
+    setViewMode("upload");
+    setError(null);
+    clearSavedWordsAuth();
+    setSavedWords([]);
+  }, []);
+
   const handleAuthExpired = React.useCallback(async () => {
     const auth = getFirebaseAuth();
     try {
@@ -338,6 +383,7 @@ export default function Page() {
     }
 
     setFirebaseUser(null);
+    setAppSessionUsername("");
     setIsAuthenticated(false);
     setActiveSavedDocumentId(null);
     setAudioCacheStore({});
@@ -402,7 +448,7 @@ export default function Page() {
   }, [firebaseUser]);
 
   const handleOpenSavedFiles = async () => {
-    if (!firebaseUser) return;
+    if (!isAuthenticated && !appSessionUsername) return;
 
     setViewMode("saved-files");
     setSavedFilesLoading(true);
@@ -482,7 +528,7 @@ export default function Page() {
   };
 
   const handleLoadSavedFile = async (documentId: string) => {
-    if (!firebaseUser || openingSavedDocumentId) return;
+    if ((!firebaseUser && !appSessionUsername) || openingSavedDocumentId) return;
 
     setOpeningSavedDocumentId(documentId);
     setError(null);
@@ -527,7 +573,12 @@ export default function Page() {
 
   useEffect(() => {
     const hasImage = results[0]?.image_base64;
-    if (!isAuthenticated || !firebaseUser || firebaseUser.isAnonymous || results.length === 0 || !hasImage) {
+    if (
+      !isAuthenticated ||
+      results.length === 0 ||
+      !hasImage ||
+      (firebaseUser ? firebaseUser.isAnonymous : false)
+    ) {
       return;
     }
 
@@ -1036,6 +1087,8 @@ export default function Page() {
     return previousViewMode;
   };
 
+  const authDisplayName = firebaseUser?.phoneNumber || appSessionUsername || "";
+
   if (authLoading) {
     return (
       <div className="flex min-h-screen w-screen items-center justify-center bg-white dark:bg-slate-950">
@@ -1045,7 +1098,10 @@ export default function Page() {
   }
 
   if (!isAuthenticated) {
-    return <PhoneAuthView onAuthenticated={() => setIsAuthenticated(true)} />;
+    return <PhoneAuthView onAuthenticated={(username) => {
+      setAppSessionUsername(username || "");
+      setIsAuthenticated(true);
+    }} />;
   }
 
   // Upload View
@@ -1056,7 +1112,7 @@ export default function Page() {
         error={error}
         onFileChange={handleFileChange}
         loadingFileCount={loadingFileCount}
-        onMyFilesClick={!firebaseUser || firebaseUser.isAnonymous ? undefined : handleOpenSavedFiles}
+        onMyFilesClick={(!firebaseUser && !appSessionUsername) || (firebaseUser?.isAnonymous ?? false) ? undefined : handleOpenSavedFiles}
         onSavedWordsClick={handleOpenWordList}
         onWriteTextClick={() => {
           setResults([{
@@ -1081,10 +1137,15 @@ export default function Page() {
         readingLanguage={settings.readingLanguage}
         onReadingLanguageChange={handleReadingLanguageChange}
         authSection={
-          firebaseUser?.phoneNumber ? (
-            <p className="text-sm text-blue-700 dark:text-blue-300 text-center font-semibold">
-              Signed in as {firebaseUser.phoneNumber}
-            </p>
+          authDisplayName ? (
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="w-full text-sm text-blue-700 dark:text-blue-300 text-center font-semibold hover:text-blue-900 dark:hover:text-blue-100"
+            >
+              Signed in as {authDisplayName}
+              <span className="ml-1 underline decoration-2 underline-offset-4">- Sign out</span>
+            </button>
           ) : null
         }
       />
@@ -1097,7 +1158,8 @@ export default function Page() {
         files={savedFiles}
         loading={savedFilesLoading}
         openingDocumentId={openingSavedDocumentId}
-        phoneNumber={firebaseUser?.phoneNumber || undefined}
+        phoneNumber={authDisplayName || undefined}
+        onSignOut={handleSignOut}
         settings={settings}
         onBackClick={() => setViewMode("upload")}
         onSettingsClick={() => {

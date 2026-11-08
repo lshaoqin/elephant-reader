@@ -119,7 +119,8 @@ def save_user_file():
 
     if isinstance(first_image_base64, str) and first_image_base64.strip():
         try:
-            preview_bytes = base64.b64decode(first_image_base64)
+            raw_base64 = first_image_base64.split(",", 1)[1] if "," in first_image_base64 else first_image_base64
+            preview_bytes = base64.b64decode(raw_base64)
             bucket.blob(preview_path).upload_from_string(preview_bytes, content_type="image/jpeg")
             has_preview = True
         except Exception:

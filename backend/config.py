@@ -1,6 +1,11 @@
 """Configuration settings for the Flask application."""
 import os
-from dotenv import load_dotenv
+
+try:
+    from dotenv import load_dotenv
+except ImportError:  # pragma: no cover - optional dependency in lightweight local environments
+    def load_dotenv():
+        return False
 
 load_dotenv()
 

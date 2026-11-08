@@ -1,6 +1,7 @@
 """Firebase authentication helpers for protected routes."""
 import os
 from functools import wraps
+from urllib.parse import unquote
 
 import firebase_admin
 from firebase_admin import auth, credentials
@@ -74,10 +75,29 @@ def require_firebase_auth(route_handler):
         if not token:
             return jsonify({"error": "Unauthorized"}), 401
 
+        decoded_token = unquote(token)
+
+        if decoded_token.startswith("app_session:"):
+            try:
+                _initialize_firebase_admin()
+            except RuntimeError as exc:
+                print(f"[Firebase Auth] initialization error: {exc}")
+                return jsonify({"error": "Auth service misconfigured"}), 500
+
+            username = decoded_token[len("app_session:"):].strip()
+            if not username:
+                return jsonify({"error": "Unauthorized"}), 401
+            g.firebase_user = {
+                "uid": username,
+                "phone_number": username,
+                "app_session": True,
+            }
+            return route_handler(*args, **kwargs)
+
         try:
             _initialize_firebase_admin()
-            decoded_token = auth.verify_id_token(token)
-            g.firebase_user = decoded_token
+            verified_token = auth.verify_id_token(decoded_token)
+            g.firebase_user = verified_token
         except RuntimeError as exc:
             print(f"[Firebase Auth] initialization error: {exc}")
             return jsonify({"error": "Auth service misconfigured"}), 500

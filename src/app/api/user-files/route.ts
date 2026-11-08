@@ -7,6 +7,8 @@ export async function GET(req: NextRequest) {
   const authResult = await requireFirebaseAuth(req);
   if (authResult instanceof NextResponse) return authResult;
 
+  if (!authResult) return new NextResponse("Unauthorized", { status: 401 });
+
   const backendUrl = process.env.PYTHON_BACKEND_URL || "http://localhost:8080";
 
   const response = await fetch(`${backendUrl}/user-files`, {
@@ -25,10 +27,9 @@ export async function GET(req: NextRequest) {
   const documents = Array.isArray(data.documents)
     ? data.documents.map((item: Record<string, unknown>) => {
         const id = String(item.id || "");
-        const hasPreview = Boolean(item.hasPreview);
         return {
           ...item,
-          previewImageUrl: hasPreview && id ? `/api/user-files/${id}/preview` : null,
+          previewImageUrl: id ? `/api/user-files/${id}/preview` : null,
         };
       })
     : [];
@@ -39,6 +40,8 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const authResult = await requireFirebaseAuth(req);
   if (authResult instanceof NextResponse) return authResult;
+
+  if (!authResult) return new NextResponse("Unauthorized", { status: 401 });
 
   const backendUrl = process.env.PYTHON_BACKEND_URL || "http://localhost:8080";
   const body = await req.json();

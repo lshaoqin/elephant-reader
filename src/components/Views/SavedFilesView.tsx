@@ -11,6 +11,7 @@ interface SavedFilesViewProps {
   loading: boolean;
   openingDocumentId?: string | null;
   phoneNumber?: string;
+  onSignOut?: () => void;
   settings: TextSettings;
   onBackClick: () => void;
   onSettingsClick: () => void;
@@ -25,6 +26,7 @@ export const SavedFilesView: React.FC<SavedFilesViewProps> = ({
   loading,
   openingDocumentId,
   phoneNumber,
+  onSignOut,
   settings,
   onBackClick,
   onSettingsClick,
@@ -240,12 +242,15 @@ export const SavedFilesView: React.FC<SavedFilesViewProps> = ({
             </button>
           </div>
           {phoneNumber && (
-            <p
-              className="text-sm text-gray-600 dark:text-gray-300 mb-6"
+            <button
+              type="button"
+              onClick={onSignOut}
+              className="text-left text-sm text-gray-600 dark:text-gray-300 mb-6 hover:text-gray-900 dark:hover:text-gray-100"
               style={{ fontFamily: settings.fontFamily }}
             >
-              Signed in as {phoneNumber}
-            </p>
+              Signed in as {phoneNumber} - 
+              <span className="ml-1 underline decoration-2 underline-offset-4">Sign out</span>
+            </button>
           )}
 
           {loading ? (

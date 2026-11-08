@@ -1,99 +1,52 @@
 "use client";
 
-import React, { useId, useRef, useState } from "react";
-import { RecaptchaVerifier, signInWithPhoneNumber } from "firebase/auth";
-import { getFirebaseAuth } from "@/utils/firebase-client";
+import React, { useState } from "react";
 import { Cross2Icon } from "@radix-ui/react-icons";
 
 interface PhoneAuthViewProps {
-  onAuthenticated?: (phoneNumber?: string) => void;
+  onAuthenticated?: (username?: string) => void;
   embedded?: boolean;
   onClose?: () => void;
 }
+
+const normalizeUsername = (value: string) => value.trim();
 
 export const PhoneAuthView: React.FC<PhoneAuthViewProps> = ({
   onAuthenticated,
   embedded = false,
   onClose,
 }) => {
-  const [phoneNumber, setPhoneNumber] = useState("+65 ");
-  const [otpCode, setOtpCode] = useState("");
-  const [confirmationResult, setConfirmationResult] = useState<Awaited<
-    ReturnType<typeof signInWithPhoneNumber>
-  > | null>(null);
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const recaptchaVerifierRef = useRef<RecaptchaVerifier | null>(null);
-  const recaptchaContainerId = useId().replace(/:/g, "-");
-  const normalizedPhone = phoneNumber.replace(/\s+/g, "").trim();
 
-  const getOrCreateRecaptchaVerifier = () => {
-    const auth = getFirebaseAuth();
-    if (!auth) {
-      throw new Error("Firebase is not configured. Please set Firebase env variables.");
-    }
-
-    if (recaptchaVerifierRef.current) {
-      return recaptchaVerifierRef.current;
-    }
-
-    const verifier = new RecaptchaVerifier(auth, recaptchaContainerId, {
-      size: "invisible",
-    });
-
-    recaptchaVerifierRef.current = verifier;
-    return verifier;
-  };
-
-  const handleSendCode = async () => {
+  const handleSignIn = async () => {
     setError(null);
     setLoading(true);
 
     try {
-      if (!/^\+65\d{8}$/.test(normalizedPhone)) {
-        throw new Error("Please enter a valid Singapore number with 8 digits.");
+      const nextUsername = normalizeUsername(username);
+      const nextPassword = password.trim();
+
+      if (!nextUsername || !nextPassword) {
+        throw new Error("Please enter both your username and password.");
       }
-
-      const auth = getFirebaseAuth();
-      if (!auth) {
-        throw new Error("Firebase is not configured. Please set Firebase env variables.");
-      }
-
-      const verifier = getOrCreateRecaptchaVerifier();
-      const confirmation = await signInWithPhoneNumber(auth, normalizedPhone, verifier);
-      setConfirmationResult(confirmation);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to send OTP";
-      setError(message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleVerifyCode = async () => {
-    if (!confirmationResult) return;
-
-    setError(null);
-    setLoading(true);
-
-    try {
-      const result = await confirmationResult.confirm(otpCode.trim());
-      const idToken = await result.user.getIdToken(true);
 
       const response = await fetch("/api/auth/session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idToken }),
+        body: JSON.stringify({ username: nextUsername, password: nextPassword }),
       });
 
+      const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        const data = await response.json().catch(() => ({ error: "Failed to create session" }));
-        throw new Error(data.error || "Failed to create session");
+        throw new Error(data.error || "Invalid username or password");
       }
 
-      onAuthenticated?.(result.user.phoneNumber || undefined);
+      onAuthenticated?.(nextUsername);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Invalid OTP";
+      const message = err instanceof Error ? err.message : "Failed to sign in";
       setError(message);
     } finally {
       setLoading(false);
@@ -110,63 +63,42 @@ export const PhoneAuthView: React.FC<PhoneAuthViewProps> = ({
         <button
           onClick={onClose}
           className="absolute top-3 right-3 p-1 rounded hover:bg-gray-100 dark:hover:bg-slate-800"
-          aria-label="Close phone login"
+          aria-label="Close sign in"
         >
           <Cross2Icon className="w-4 h-4" />
         </button>
       )}
-      <h1 className="text-2xl font-bold text-blue-600 mb-2 pr-8">Sign in with your phone number</h1>
+      <h1 className="text-2xl font-bold text-blue-600 mb-2 pr-8">Sign in</h1>
       <p className="text-sm text-gray-600 dark:text-gray-300 mb-6">
-        A new account will be created if the phone number is not registered.
+        Use your configured username and password. Existing phone-number accounts can keep the phone number as the username.
       </p>
 
       <div className="space-y-4">
         <input
-          type="tel"
-          value={phoneNumber}
-          onChange={(e) => {
-            const input = e.target.value;
-
-            if (!input.startsWith("+65")) {
-              setPhoneNumber("+65 ");
-              return;
-            }
-
-            const localDigits = input.slice(3).replace(/\D/g, "").slice(0, 8);
-            setPhoneNumber(`+65 ${localDigits}`);
-          }}
-          placeholder="+6581234567"
+          type="text"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          placeholder="Username or phone number"
           className="w-full rounded-lg border border-gray-300 dark:border-gray-700 px-4 py-3 text-base bg-white dark:bg-slate-800"
-          disabled={loading || !!confirmationResult}
+          disabled={loading}
         />
 
-        {!confirmationResult ? (
-          <button
-            onClick={handleSendCode}
-            disabled={loading || !/^\+65\d{8}$/.test(normalizedPhone)}
-            className="w-full rounded-lg bg-blue-600 px-4 py-3 text-white font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading ? "Sending code..." : "Send OTP"}
-          </button>
-        ) : (
-          <>
-            <input
-              type="text"
-              value={otpCode}
-              onChange={(e) => setOtpCode(e.target.value)}
-              placeholder="Enter 6-digit OTP"
-              className="w-full rounded-lg border border-gray-300 dark:border-gray-700 px-4 py-3 text-base bg-white dark:bg-slate-800"
-              disabled={loading}
-            />
-            <button
-              onClick={handleVerifyCode}
-              disabled={loading || !otpCode.trim()}
-              className="w-full rounded-lg bg-blue-600 px-4 py-3 text-white font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? "Verifying..." : "Verify OTP"}
-            </button>
-          </>
-        )}
+        <input
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="Password"
+          className="w-full rounded-lg border border-gray-300 dark:border-gray-700 px-4 py-3 text-base bg-white dark:bg-slate-800"
+          disabled={loading}
+        />
+
+        <button
+          onClick={handleSignIn}
+          disabled={loading || !username.trim() || !password.trim()}
+          className="w-full rounded-lg bg-blue-600 px-4 py-3 text-white font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {loading ? "Signing in..." : "Sign in"}
+        </button>
       </div>
 
       {error && <p className="mt-4 text-sm text-red-600 dark:text-red-400">{error}</p>}
@@ -184,8 +116,6 @@ export const PhoneAuthView: React.FC<PhoneAuthViewProps> = ({
       >
         {loading ? "Signing in..." : "Continue as Guest"}
       </button>
-
-      <div id={recaptchaContainerId} className="mt-5" />
     </div>
   );
 

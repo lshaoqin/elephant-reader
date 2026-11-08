@@ -195,10 +195,38 @@ export const TextView: React.FC<TextViewProps> = ({
     return buildWordHuntQuestionPool(displayText, normalizeToken);
   }, [displayText, normalizeToken]);
 
+  const getPatternHintLineIndexes = useCallback((text: string, correctWords: string[]): number[] => {
+    const normalizedTargets = new Set(
+      correctWords.map((word) => normalizeToken(word)).filter((word) => word.length > 0)
+    );
+    if (!normalizedTargets.size) return [];
+
+    const lines = text.replace(/<b>|<\/b>/g, "").split(/\n/);
+    const lineIndexes = new Set<number>();
+
+    lines.forEach((line, lineIndex) => {
+      const tokens = line.split(/(\s+)/);
+      for (const token of tokens) {
+        if (/^\s+$/.test(token) || !token.trim()) continue;
+        if (normalizedTargets.has(normalizeToken(token))) {
+          lineIndexes.add(lineIndex);
+        }
+      }
+    });
+
+    return Array.from(lineIndexes);
+  }, [normalizeToken]);
+
   const wordHuntHintLineIndexSet = React.useMemo(() => {
-    if (wordHuntData?.mode !== "vocabulary") return new Set<number>();
-    return new Set((wordHuntData.hint_line_indexes || []).filter((value) => Number.isInteger(value) && value >= 0));
-  }, [wordHuntData]);
+    if (!wordHuntData) return new Set<number>();
+    const hintLineIndexes = wordHuntData.hint_line_indexes?.length
+      ? wordHuntData.hint_line_indexes
+      : wordHuntData.mode === "pattern"
+        ? getPatternHintLineIndexes(displayText, wordHuntData.correct_words)
+        : [];
+
+    return new Set(hintLineIndexes.filter((value) => Number.isInteger(value) && value >= 0));
+  }, [displayText, getPatternHintLineIndexes, wordHuntData]);
 
   const disableWordTap = Boolean(wordHuntData) && revealedAnswers;
 
@@ -212,11 +240,7 @@ export const TextView: React.FC<TextViewProps> = ({
     tokens.forEach((token, index) => {
       if (/^\s+$/.test(token)) {
         const hasLineBreak = token.includes("\n");
-        if (
-          wordHuntData?.mode === "vocabulary" &&
-          wordHuntHintLineIndexSet.has(currentLineIndex) &&
-          !hasLineBreak
-        ) {
+        if (wordHuntHintLineIndexSet.has(currentLineIndex) && !hasLineBreak) {
           hintIndexes.add(index);
         }
         currentLineIndex += (token.match(/\n/g) || []).length;
@@ -235,7 +259,6 @@ export const TextView: React.FC<TextViewProps> = ({
       }
 
       if (
-        wordHuntData?.mode === "vocabulary" &&
         wordHuntHintLineIndexSet.has(currentLineIndex) &&
         !successIndexes.has(index) &&
         !revealIndexes.has(index)
@@ -245,7 +268,7 @@ export const TextView: React.FC<TextViewProps> = ({
     });
 
     return { successIndexes, revealIndexes, hintIndexes };
-  }, [correctWordKeySet, foundWordKeys, normalizeToken, revealedAnswers, wordHuntData?.mode, wordHuntHintLineIndexSet]);
+  }, [correctWordKeySet, foundWordKeys, normalizeToken, revealedAnswers, wordHuntHintLineIndexSet]);
 
   const getRandomVocabularyChunk = useCallback((text: string): { chunkText: string; hintLineIndexes: number[] } => {
     const plainText = text.replace(/<b>|<\/b>/g, "");
@@ -317,7 +340,7 @@ export const TextView: React.FC<TextViewProps> = ({
     return { chunkText, hintLineIndexes };
   }, []);
 
-  const fetchVocabularyWordHuntQuestion = useCallback(async (): Promise<WordHuntData | null> => {
+  const fetchWordHuntQuestion = useCallback(async (mode: "vocabulary" | "pattern"): Promise<WordHuntData | null> => {
     const headers: HeadersInit = {
       "Content-Type": "application/json",
     };
@@ -329,19 +352,27 @@ export const TextView: React.FC<TextViewProps> = ({
       headers.Authorization = `Bearer ${token}`;
     }
 
-    const { chunkText, hintLineIndexes } = getRandomVocabularyChunk(displayText);
-    const excludedWords = Array.from(vocabularyExcludedWordsRef.current);
     const ttsConfig = getTtsVoiceConfig(settings.readingLanguage);
+    const body: Record<string, string | string[] | number[] | undefined> = {
+      mode,
+      language_code: ttsConfig.languageCode,
+      voice_name: ttsConfig.voiceName,
+    };
+
+    if (mode === "vocabulary") {
+      const { chunkText, hintLineIndexes } = getRandomVocabularyChunk(displayText);
+      const excludedWords = Array.from(vocabularyExcludedWordsRef.current);
+      body.text = chunkText;
+      body.excluded_words = excludedWords;
+      body.hint_line_indexes = hintLineIndexes;
+    } else {
+      body.text = displayText;
+    }
 
     const response = await fetch("/api/word-hunt", {
       method: "POST",
       headers,
-      body: JSON.stringify({
-        text: chunkText,
-        excluded_words: excludedWords,
-        language_code: ttsConfig.languageCode,
-        voice_name: ttsConfig.voiceName,
-      }),
+      body: JSON.stringify(body),
     });
 
     if (!response.ok) {
@@ -382,22 +413,44 @@ export const TextView: React.FC<TextViewProps> = ({
       return null;
     }
 
+    const patternHintLineIndexes =
+      mode === "pattern" ? getPatternHintLineIndexes(displayText, correctWords) : undefined;
+
     const questionData: WordHuntData = {
-      mode: "vocabulary",
+      mode,
       question: String(data.question).trim(),
       correct_words: correctWords,
-      completion_feedback: String(data.completion_feedback || "Great vocabulary spotting!").trim(),
-      hint_line_indexes: hintLineIndexes,
+      completion_feedback: String(data.completion_feedback || (mode === "vocabulary" ? "Great vocabulary spotting!" : "Great phonics spotting!")).trim(),
+      encouragement_prompt: String(data.encouragement_prompt || data.completion_feedback || (mode === "vocabulary" ? "Great vocabulary spotting!" : "Great phonics spotting!")).trim(),
+      tip: String(data.tip || (mode === "vocabulary" ? "Keep looking for the meaning in the text." : "Look for the shared sound in each word.")).trim(),
+      hint_line_indexes:
+        mode === "vocabulary"
+          ? (Array.isArray((body as { hint_line_indexes?: number[] }).hint_line_indexes)
+              ? (body as { hint_line_indexes: number[] }).hint_line_indexes
+              : undefined)
+          : patternHintLineIndexes && patternHintLineIndexes.length > 0
+            ? patternHintLineIndexes
+            : undefined,
       word_audio: wordAudio,
     };
 
-    questionData.correct_words
-      .map((word) => normalizeToken(word))
-      .filter(Boolean)
-      .forEach((word) => vocabularyExcludedWordsRef.current.add(word));
+    if (mode === "vocabulary") {
+      questionData.correct_words
+        .map((word) => normalizeToken(word))
+        .filter(Boolean)
+        .forEach((word) => vocabularyExcludedWordsRef.current.add(word));
+    }
 
     return questionData;
-  }, [displayText, getRandomVocabularyChunk, normalizeToken, settings.readingLanguage]);
+  }, [displayText, getPatternHintLineIndexes, getRandomVocabularyChunk, normalizeToken, settings.readingLanguage]);
+
+  const fetchVocabularyWordHuntQuestion = useCallback(async (): Promise<WordHuntData | null> => {
+    return fetchWordHuntQuestion("vocabulary");
+  }, [fetchWordHuntQuestion]);
+
+  const fetchPatternWordHuntQuestion = useCallback(async (): Promise<WordHuntData | null> => {
+    return fetchWordHuntQuestion("pattern");
+  }, [fetchWordHuntQuestion]);
 
   const stopWordHuntAudio = useCallback(() => {
     if (wordHuntAudioRef.current) {
@@ -415,7 +468,7 @@ export const TextView: React.FC<TextViewProps> = ({
   }, [stopWordHuntAudio]);
 
   useEffect(() => {
-    if (wordHuntData?.mode === "vocabulary" && wordHuntData.hint_line_indexes?.length) {
+    if ((wordHuntData?.hint_line_indexes?.length || (wordHuntData?.mode === "pattern" && wordHuntHintLineIndexSet.size > 0))) {
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           const container = textContentRef.current;
@@ -427,7 +480,7 @@ export const TextView: React.FC<TextViewProps> = ({
         });
       });
     }
-  }, [wordHuntData]);
+  }, [wordHuntData, wordHuntHintLineIndexSet]);
 
   const playWordHuntWordAudioFromPayload = useCallback(async (audioPayload: WordHuntWordAudio) => {
     stopWordHuntAudio();
@@ -562,7 +615,12 @@ export const TextView: React.FC<TextViewProps> = ({
         }
       } else {
         vocabularyExcludedWordsRef.current.clear();
-        questionPool = wordHuntQuestionPool;
+        const patternQuestion = await fetchPatternWordHuntQuestion().catch(() => null);
+        if (patternQuestion) {
+          questionPool = [patternQuestion];
+        } else {
+          questionPool = wordHuntQuestionPool;
+        }
       }
 
       if (questionPool.length === 0) {
@@ -587,7 +645,7 @@ export const TextView: React.FC<TextViewProps> = ({
     } finally {
       setWordHuntLoading(false);
     }
-  }, [fetchVocabularyWordHuntQuestion, selectedWordHuntMode, wordHuntData, wordHuntQuestionPool, settings.readingLanguage]);
+  }, [fetchPatternWordHuntQuestion, fetchVocabularyWordHuntQuestion, selectedWordHuntMode, wordHuntData, wordHuntQuestionPool, settings.readingLanguage]);
 
   const loadNextVocabularyQuestion = useCallback(async () => {
     setWordHuntLoading(true);
@@ -613,6 +671,30 @@ export const TextView: React.FC<TextViewProps> = ({
     }
   }, [fetchVocabularyWordHuntQuestion]);
 
+  const loadNextPatternQuestion = useCallback(async () => {
+    setWordHuntLoading(true);
+    setWordHuntFeedback(null);
+
+    try {
+      const nextQuestion = await fetchPatternWordHuntQuestion().catch(() => null);
+      if (!nextQuestion) {
+        setWordHuntFeedback("No new phonics question available right now.");
+        return;
+      }
+
+      setSelectedWordHuntMode("pattern");
+      setCurrentWordHuntQuestionIndex(0);
+      setActiveWordHuntQuestions([nextQuestion]);
+      setWordHuntData(nextQuestion);
+      setFoundWordKeys(new Set());
+      setRevealedAnswers(false);
+      setShowWordList(false);
+      setWordHuntFeedback(null);
+    } finally {
+      setWordHuntLoading(false);
+    }
+  }, [fetchPatternWordHuntQuestion]);
+
   const handleWordHuntModeSwitch = useCallback((mode: WordHuntMode) => {
     if (mode === selectedWordHuntMode && wordHuntData?.mode === mode) {
       return;
@@ -637,6 +719,11 @@ export const TextView: React.FC<TextViewProps> = ({
       return;
     }
 
+    if (wordHuntData?.mode === "pattern") {
+      void loadNextPatternQuestion();
+      return;
+    }
+
     if (activeWordHuntQuestions.length <= 1) {
       setWordHuntFeedback("No other question available for this text.");
       return;
@@ -649,7 +736,7 @@ export const TextView: React.FC<TextViewProps> = ({
     setRevealedAnswers(false);
     setShowWordList(false);
     setWordHuntFeedback(null);
-  }, [activeWordHuntQuestions, currentWordHuntQuestionIndex, loadNextVocabularyQuestion, wordHuntData?.mode]);
+  }, [activeWordHuntQuestions, currentWordHuntQuestionIndex, loadNextPatternQuestion, loadNextVocabularyQuestion, wordHuntData?.mode]);
 
   const nextQuestion = useCallback(() => {
     skipQuestion();
@@ -685,9 +772,10 @@ export const TextView: React.FC<TextViewProps> = ({
       setWordHuntFeedback(getTapSuccessMessage());
 
       if (nextFound.size >= correctWordKeySet.size && correctWordKeySet.size > 0) {
-        const finalFeedback = wordHuntData.mode === "vocabulary"
-          ? wordHuntData.completion_feedback
-          : `${wordHuntData.completion_feedback} ${getQuestionAwareTipMessage(wordHuntData.question)}`;
+        const finalFeedback = [
+          wordHuntData.encouragement_prompt || wordHuntData.completion_feedback,
+          wordHuntData.tip || getQuestionAwareTipMessage(wordHuntData.question),
+        ].filter(Boolean).join(" ");
         setWordHuntFeedback(finalFeedback);
       }
     }

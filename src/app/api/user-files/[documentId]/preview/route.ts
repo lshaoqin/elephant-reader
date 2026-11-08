@@ -12,6 +12,7 @@ export async function GET(
   if (!authResult) return new NextResponse("Unauthorized", { status: 401 });
 
   const { documentId } = await context.params;
+
   const backendUrl = process.env.PYTHON_BACKEND_URL || "http://localhost:8080";
 
   const response = await fetch(`${backendUrl}/user-files/${documentId}/preview`, {

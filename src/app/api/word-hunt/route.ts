@@ -12,6 +12,7 @@ export async function POST(req: Request) {
     const text = typeof body?.text === "string" ? body.text.trim() : "";
     const languageCode = typeof body?.language_code === "string" ? body.language_code.trim() : "";
     const voiceName = typeof body?.voice_name === "string" ? body.voice_name.trim() : "";
+    const mode = body?.mode === "pattern" ? "pattern" : "vocabulary";
 
     if (!text) {
       return NextResponse.json({ error: "No text provided" }, { status: 400 });
@@ -26,7 +27,7 @@ export async function POST(req: Request) {
       headers["Authorization"] = `Bearer ${authResult!.token}`;
     }
 
-    const response = await fetch(`${backendUrl}/word-hunt/vocabulary`, {
+    const response = await fetch(`${backendUrl}/word-hunt/${mode}`, {
       method: "POST",
       headers,
       body: JSON.stringify({
